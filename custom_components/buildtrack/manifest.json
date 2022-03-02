@@ -1,0 +1,17 @@
+{
+  "domain": "buildtrack",
+  "name": "Buildtrack",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/buildtrack",
+  "requirements": [
+    "websocket-client==1.3.1",
+    "requests==2.27.1",
+    "aiohttp==3.8.1"
+  ],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": ["@rohitranjan1991"],
+  "iot_class": "cloud_polling"
+}
