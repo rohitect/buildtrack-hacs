@@ -1,4 +1,4 @@
-"""This is a wrapper class to interact with the build track switch."""
+"""This is a wrapper class to interact with the build track fan."""
 import logging
 from os import pread
 from typing import Any
@@ -7,6 +7,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import ToggleEntity
+from homeassistant.components.fan import FanEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .buildtrack_api import BuildTrackAPI
@@ -31,7 +32,7 @@ async def async_setup_entry(
     )
 
 
-class BuildTrackFanEntity(ToggleEntity):
+class BuildTrackFanEntity(FanEntity):
 
     percentage: int = 0
     selected_preset_mode = "Low"
@@ -83,7 +84,7 @@ class BuildTrackFanEntity(ToggleEntity):
         """Switche on the device."""
         await self.hub.switch_on(self.id)
         self.hass.bus.fire(
-            event_type="buildtrack_switch_state_change",
+            event_type="buildtrack_fan_state_change",
             event_data={
                 "integration": "buildtrack",
                 "entity_name": self.name,
@@ -95,7 +96,7 @@ class BuildTrackFanEntity(ToggleEntity):
         """Switche off the device."""
         await self.hub.switch_off(self.id)
         self.hass.bus.fire(
-            event_type="buildtrack_switch_state_change",
+            event_type="buildtrack_fan_state_change",
             event_data={
                 "integration": "buildtrack",
                 "entity_name": self.name,
@@ -119,5 +120,4 @@ class BuildTrackFanEntity(ToggleEntity):
         return self.selected_preset_mode
 
     async def async_set_percentage(self, percentage: int) -> None:
-        """Set the speed percentage of the fan."""
-        pass
+         await self.hub.switch_on(self.id,percentage)

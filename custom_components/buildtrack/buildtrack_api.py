@@ -149,6 +149,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
                     }
 
     def switch_on(self, mac_id, pin_number, speed=None):
+        """Switch on the device"""
         param = {"pin": pin_number, "state": "on"}
         if speed is not None:
             param["speed "] = speed
@@ -171,9 +172,32 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         self.manual_device_state_update(mac_id, pin_number, True)
 
     def switch_off(self, mac_id, pin_number, speed=None):
+        """Switch Off device"""
         param = {"pin": pin_number, "state": "off"}
         if speed is not None:
             param["speed "] = speed
+        message = json.dumps(
+            [
+                "event_push",
+                json.dumps(
+                    {
+                        "macID": mac_id,
+                        "event": "execute",
+                        "command": "execute",
+                        "params": [param],
+                        "passcode": mac_id,
+                        "to": mac_id,
+                    }
+                ),
+            ]
+        )
+        self.websocket_connection.send("42" + message)
+        self.manual_device_state_update(mac_id, pin_number, False)
+
+    def set_cover_state(self, mac_id, pin_number, state="open"):
+        """Set Cover state"""
+        param = {"pin": pin_number, "state": state, "speed": "0"}
+
         message = json.dumps(
             [
                 "event_push",
@@ -355,6 +379,27 @@ class BuildTrackAPI(metaclass=Singleton):
         pin_number = self.device_raw_details_map[device_id]["pin_number"]
         self.device_state_manager.switch_off(mac_id, pin_number, speed)
 
+    def open_cover(self, device_id: str):
+        mac_id = self.get_mac_id_for_device(
+            self.devices_by_room[device_id]["parentrecordID"]
+        )
+        pin_number = self.device_raw_details_map[device_id]["pin_number"]
+        self.device_state_manager.set_cover_state(mac_id, pin_number, state="open")
+
+    def close_cover(self, device_id: str):
+        mac_id = self.get_mac_id_for_device(
+            self.devices_by_room[device_id]["parentrecordID"]
+        )
+        pin_number = self.device_raw_details_map[device_id]["pin_number"]
+        self.device_state_manager.set_cover_state(mac_id, pin_number, state="close")
+
+    def stop_cover(self, device_id: str):
+        mac_id = self.get_mac_id_for_device(
+            self.devices_by_room[device_id]["parentrecordID"]
+        )
+        pin_number = self.device_raw_details_map[device_id]["pin_number"]
+        self.device_state_manager.set_cover_state(mac_id, pin_number, state="stop")
+
     def is_device_on(self, device_id: str) -> bool:
         """Check if the device is on or not."""
         if device_id not in self.devices_by_room.keys():
@@ -379,3 +424,6 @@ class BuildTrackAPI(metaclass=Singleton):
             self.devices_by_room[device_id]["parentrecordID"]
         )
         self.device_state_manager.listen_to_device_status(mac_id)
+
+
+# 42["event_push","{\"macID\":\"40F5202635A3\",\"event\":\"execute\",\"command\":\"execute\",\"params\":[{\"pin\":\"1\",\"state\":\"close\",\"speed\":\"0\"}],\"passcode\":\"40F5202635A3\",\"to\":\"40F5202635A3\"}"] open | stop
