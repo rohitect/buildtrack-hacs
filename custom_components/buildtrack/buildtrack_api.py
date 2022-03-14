@@ -105,12 +105,6 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def is_device_on(self, mac_id, pin_number) -> bool:
         """Check if the device stats is on or off."""
-        # return (
-        #     False
-        #     if f"{pin_number}" not in self.mac_id_wise_state[mac_id]
-        #     or self.mac_id_wise_state[mac_id][f"{pin_number}"] == 0
-        #     else True
-        # )
         return not (
             mac_id not in self.mac_id_wise_state or
             f"{pin_number}" not in self.mac_id_wise_state[mac_id]
@@ -130,6 +124,13 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             decoded_message = json.loads(actual_data)
             if decoded_message[0] == "status":
                 self.update_switch_state(decoded_message[1])
+
+    def fetch_device_state(self, mac_id, pin_number):
+        """return the device state object"""
+        if mac_id not in self.mac_id_wise_state or f"{pin_number}" not in self.mac_id_wise_state[mac_id]:
+            return {"state": 0, "speed": 0}
+        else:
+            return self.mac_id_wise_state[mac_id][f"{pin_number}"]
 
     def update_switch_state(self, decoded_message):
         """Update the switch state on the buildtrack server."""
@@ -152,7 +153,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         """Switch on the device"""
         param = {"pin": pin_number, "state": "on"}
         if speed is not None:
-            param["speed "] = speed
+            param["speed"] = str(speed)
         message = json.dumps(
             [
                 "event_push",
@@ -361,6 +362,13 @@ class BuildTrackAPI(metaclass=Singleton):
         """Return back the mac id for the device."""
         if device_id in self.device_parent_ids_map:
             return self.device_parent_ids_map[device_id]["mac_id"]
+
+    def get_device_state(self, device_id: str):
+        mac_id = self.get_mac_id_for_device(
+            self.devices_by_room[device_id]["parentrecordID"]
+        )
+        pin_number = self.device_raw_details_map[device_id]["pin_number"]
+        return self.device_state_manager.fetch_device_state(mac_id, pin_number)
 
     async def switch_on(self, device_id: str, speed=None):
         """Turn the device on."""
