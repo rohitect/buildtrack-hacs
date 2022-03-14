@@ -22,12 +22,12 @@ async def async_setup_entry(
     # username = config['username']
     # password = config['password']
     api: BuildTrackAPI = hass.data[DOMAIN][config_entry.entry_id]
-    if not await hass.async_add_executor_job(api.authenticate_user):
-        _LOGGER.error("Invalid Buildtrack credentials")
-        return
+    # if not await hass.async_add_executor_job(api.authenticate_user):
+    #     _LOGGER.error("Invalid Buildtrack credentials")
+    #     return
     async_add_entities(
         BuildtrackSwitch(hass, api, switch)
-        for switch in await hass.async_add_executor_job(api.discover_switches_by_rooms)
+        for switch in await hass.async_add_executor_job(api.get_devices_of_type, "switch")
     )
 
 
@@ -61,7 +61,7 @@ class BuildtrackSwitch(SwitchEntity):
         return self.hub.is_device_on(self.id)
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Switches on the device."""
+        """Switche on the device."""
         await self.hub.switch_on(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_switch_state_change",
@@ -73,7 +73,7 @@ class BuildtrackSwitch(SwitchEntity):
         )
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Switches off the device."""
+        """Switche off the device."""
         await self.hub.switch_off(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_switch_state_change",
