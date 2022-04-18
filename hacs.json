@@ -2,5 +2,5 @@
   "name": "Buildtrack",
   "country": "IN",
   "render_readme": false,
-  "domains": ["swtich","fan"]
+  "domains": ["light", "fan"]
 }

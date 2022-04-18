@@ -9,7 +9,7 @@ from .buildtrack_api import BuildTrackAPI
 from .const import DOMAIN
 
 # For your initial PR, limit it to 1 platform.
-PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.FAN, Platform.COVER]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.FAN, Platform.COVER]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

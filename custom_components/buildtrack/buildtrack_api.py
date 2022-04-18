@@ -292,7 +292,7 @@ class BuildTrackAPI(metaclass=Singleton):
         # pin_number = "0"
         # if device_type == "fan":
         #     pin_number = "4"
-        # elif device_type == "switch":
+        # elif device_type == "light":
         #     pin_number = "1"
 
         if self.token is not None:
@@ -325,12 +325,12 @@ class BuildTrackAPI(metaclass=Singleton):
     def get_devices_of_type(self, device_type):
         """Return back all the fans
 
-        @param device_type: "fan" | "switch" | "curtain"
+        @param device_type: "fan" | "light" | "curtain"
         """
         pin_number = "0"
         if device_type == "fan":
             pin_number = "4"
-        elif device_type == "switch":
+        elif device_type == "light":
             pin_number = "1"
         elif device_type == "curtain":
             pin_number = "7"
