@@ -113,10 +113,11 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def on_message(self, websocket_con, message: str):
         """Process the input message over websocket."""
+
         if message == "40":
             self.is_websocket_connected = True
             self.register_pending_devices_listeners()
-
+    
         actual_data = None
         if message.startswith("42"):
             actual_data = message[2:]
@@ -319,6 +320,7 @@ class BuildTrackAPI(metaclass=Singleton):
             self.devices_by_room = {
                 device["ID"]: device for device in all_active_devices
             }
+            # print(all_active_devices)
             return all_active_devices
         return []
 
@@ -327,15 +329,15 @@ class BuildTrackAPI(metaclass=Singleton):
 
         @param device_type: "fan" | "switch" | "curtain"
         """
-        pin_number = "0"
+        pin_numbers = ["0"]
         if device_type == "fan":
-            pin_number = "4"
+            pin_numbers = ["3","4"] #4
         elif device_type == "switch":
-            pin_number = "1"
+            pin_numbers = ["1"]
         elif device_type == "curtain":
-            pin_number = "7"
+            pin_numbers = ["7"]
         return list(
-            filter(lambda x: x["pin_type"] == pin_number, self.devices_by_room.values())
+            filter(lambda x: x["pin_type"] in pin_numbers, self.devices_by_room.values())
         )
 
     def load_all_parent_devices(self):

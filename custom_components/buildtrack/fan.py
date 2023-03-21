@@ -2,6 +2,7 @@
 import logging
 from os import pread
 from typing import Any
+from homeassistant.util.percentage import ordered_list_item_to_percentage, percentage_to_ordered_list_item
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -50,7 +51,7 @@ class BuildTrackFanEntity(FanEntity):
 
     percentage: int = 0
     selected_preset_mode = "Low"
-    preset_modes = ["Very Low", "Low", "Medium", "High", "Very High"]
+    preset_modes = [ "Low", "Medium", "High", "Very High"]
 
     def __init__(self, hass, hub, fan) -> None:
         """Initialize the Buildtrack fan."""
@@ -89,14 +90,29 @@ class BuildTrackFanEntity(FanEntity):
     @property
     def percentage(self) -> int:
         return self.hub.get_device_state(self.id)["speed"]
+        # return ordered_list_item_to_percentage(self.preset_modes, self.hub.get_device_state(self.id)["speed"])
 
     @property
     def speed_count(self) -> int:
-        return 100
+        # return 4
+        return len(self.preset_modes)
 
     @property
     def should_poll(self) -> bool:
         return True
+    
+
+    @property
+    def preset_mode(self) -> str:
+        if self.percentage > 0 and self.percentage <= 25:
+            self.selected_preset_mode = self.preset_modes[0]
+        elif self.percentage > 25 and self.percentage <= 50:
+            self.selected_preset_mode = self.preset_modes[1]
+        elif self.percentage > 50 and self.percentage <= 75:
+            self.selected_preset_mode = self.preset_modes[2]
+        elif self.percentage > 75 and self.percentage <= 100:
+            self.selected_preset_mode = self.preset_modes[3]
+        return self.selected_preset_mode
 
     async def async_increase_speed(self, percentage_step) -> None:
         current_speed = await self.percentage
@@ -150,29 +166,19 @@ class BuildTrackFanEntity(FanEntity):
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         index = self.preset_modes.index(preset_mode)
         if index == 0:
-            await self.async_set_percentage(8)
+            await self.async_set_percentage(25)
         elif index == 1:
-            await self.async_set_percentage(20)
-        elif index == 2:
             await self.async_set_percentage(50)
+        elif index == 2:
+            await self.async_set_percentage(75)
         elif index == 3:
-            await self.async_set_percentage(80)
-        elif index == 4:
-            await self.async_set_percentage(95)
+            await self.async_set_percentage(100)
 
-    @property
-    def preset_mode(self) -> str:
-        if self.percentage > 0 and self.percentage <= 10:
-            self.selected_preset_mode = self.preset_modes[0]
-        elif self.percentage > 11 and self.percentage <= 30:
-            self.selected_preset_mode = self.preset_modes[1]
-        elif self.percentage > 31 and self.percentage <= 70:
-            self.selected_preset_mode = self.preset_modes[2]
-        elif self.percentage > 71 and self.percentage <= 90:
-            self.selected_preset_mode = self.preset_modes[3]
-        elif self.percentage > 90:
-            self.selected_preset_mode = self.preset_modes[4]
-        return self.selected_preset_mode
+    async def async_update(self) -> None:
+        pass
+        # self.percentage = self.hub.get_device_state(self.id)["speed"]
+    
+    
 
     # async def async_set_percentage(self, percentage: int) -> None:
     #     await self.hub.switch_on(self.id, percentage)
