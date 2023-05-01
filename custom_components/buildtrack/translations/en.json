@@ -12,7 +12,9 @@
             "user": {
                 "data": {
                     "password": "Password",
-                    "username": "Username"
+                    "username": "Username",
+                    "mqtt_username": "MQTT Username",
+                    "mqtt_password": "MQTT Password"
                 }
             }
         }

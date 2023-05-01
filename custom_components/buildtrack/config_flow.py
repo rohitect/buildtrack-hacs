@@ -22,6 +22,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         # vol.Required("host"): str,
         vol.Required("username"): str,
         vol.Required("password"): str,
+        vol.Required("mqtt_username"): str,
+        vol.Required("mqtt_password"): str,
     }
 )
 
@@ -62,9 +64,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # await hass.async_add_executor_job(
     #     your_validate_func, data["username"], data["password"]
     # )
-
+    print(data)
     hub = BuildTrackAPI()
     hub.set_credentials(data["username"], data["password"])
+    hub.set_mqtt_creds(data["mqtt_username"], data["mqtt_password"])
     # hub = BuildTrackAPI('rohitranjan','Rt64juVFDFmqE2S')
 
     # if not await hass.async_add_executor_job(hub.authenticate,hass,data["username"], data["password"]):
@@ -86,6 +89,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         "title": f"{hub.get_first_name()}'s Buildtrack",
         "username": data["username"],
         "password": data["password"],
+        "mqtt_username": data["mqtt_username"],
+        "mqtt_password": data["mqtt_password"],
     }
 
 

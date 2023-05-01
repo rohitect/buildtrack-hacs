@@ -18,6 +18,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # hass.data[DOMAIN][entry.entry_id] = MyApi(...)
     hub = BuildTrackAPI()
     hub.set_credentials(entry.data["username"], entry.data["password"])
+    hub.set_mqtt_creds(entry.data["mqtt_username"], entry.data["mqtt_password"])
     await hass.async_add_executor_job(hub.authenticate_user)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
