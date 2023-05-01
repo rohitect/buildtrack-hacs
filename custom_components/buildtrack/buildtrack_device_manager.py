@@ -1,4 +1,4 @@
-from .common import Singleton
+from .common import Singleton, mqtt_website_certificate
 import paho.mqtt.client as mqtt
 import json
 import threading
@@ -136,7 +136,12 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         # self.mqtt_client.tls_set(ca_certs=f"{os.getcwd()}/config/custom_components/buildtrack/ms.buildtrack.in.cer")
 
         # TODO - Enable this for production before pushing the code
-        self.mqtt_client.tls_set(ca_certs="/root/config/custom_components/buildtrack/ms.buildtrack.in.cer")
+        # self.mqtt_client.tls_set(ca_certs="/root/config/custom_components/buildtrack/ms.buildtrack.in.cer")
+
+        cert_file = open("mqtt_website_certificate.cer", "w")
+        cert_file.write(mqtt_website_certificate)
+        cert_file.close()
+        self.mqtt_client.tls_set(ca_certs="mqtt_website_certificate.cer")
 
         self.mqtt_client.tls_insecure_set(True)
         self.mqtt_client.connect("ms.buildtrack.in", 1899, 60)
