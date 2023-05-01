@@ -63,12 +63,14 @@ class BuildTrackFanEntity(FanEntity):
         self.id = fan["ID"]
         self.fan_name = fan["label"]
         self.fan_pin_type = fan["pin_type"]
+        # print(f"[FAN] Register listen to {self.room_name} {self.fan_name}...")
         self.hub.listen_device_state(self.id)
         # self.async_schedule_update_ha_state()
 
     @property
     def name(self) -> str:
         """Formulates the device name."""
+    
         return f"{self.room_name} {self.fan_name}"
 
     @property

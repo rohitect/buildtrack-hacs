@@ -68,14 +68,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     hub = BuildTrackAPI()
     hub.set_credentials(data["username"], data["password"])
     hub.set_mqtt_creds(data["mqtt_username"], data["mqtt_password"])
-    # hub = BuildTrackAPI('rohitranjan','Rt64juVFDFmqE2S')
 
     # if not await hass.async_add_executor_job(hub.authenticate,hass,data["username"], data["password"]):
     is_authenticated = await hass.async_add_executor_job(hub.authenticate_user)
 
     if not is_authenticated:
         # api = BuildTrackAPI(data['username'],data['password'])
-        # api = BuildTrackAPI('rohitranjan','Rt64juVFDFmqE2S')
         # if not await hass.async_add_executor_job(api.authenticate_user)):
         raise InvalidAuth
 
