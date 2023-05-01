@@ -131,7 +131,13 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         # self.mqtt_client.on_log = on_log
         self.mqtt_client.disconnect_callback = on_disconnect
         self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
-        self.mqtt_client.tls_set(ca_certs=f"{os.getcwd()}/config/custom_components/buildtrack/ms.buildtrack.in.cer")
+
+        # TODO - Enable this for development
+        # self.mqtt_client.tls_set(ca_certs=f"{os.getcwd()}/config/custom_components/buildtrack/ms.buildtrack.in.cer")
+
+        # TODO - Enable this for production before pushing the code
+        self.mqtt_client.tls_set(ca_certs="/root/config/custom_components/buildtrack/ms.buildtrack.in.cer")
+
         self.mqtt_client.tls_insecure_set(True)
         self.mqtt_client.connect("ms.buildtrack.in", 1899, 60)
         # self.mqtt_client.loop_forever()
