@@ -97,6 +97,8 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             print("Buildtrack MQTT Server connected with result code " + str(rc))
             # Subscribing in on_connect() means that if we lose the connection and
             # reconnect then subscriptions will be renewed.
+
+
             self.is_mqtt_connected = True
             for mac_id in self.device_mqtt_mac_ids:
                 client.subscribe(mac_id + "/status")
