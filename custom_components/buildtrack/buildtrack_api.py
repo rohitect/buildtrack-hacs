@@ -41,7 +41,7 @@ class BuildTrackAPI(metaclass=Singleton):
         try:
             response = requests.post(
                 "http://ezcentral.buildtrack.in/btadmin/index.php/commonrestappservice/login/format/json",
-                headers={"content-type": "application/x-www-form-urlencoded"},
+                headers={"content-type": "application/x-www-form-urlencoded", "referer": "https://ezcentral.buildtrack.in/login.html"},
                 data=f"useremail={self.username}&userpassword={self.password}&rememberme=true&type=authenticate",
             )
             data = response.json()
@@ -74,9 +74,11 @@ class BuildTrackAPI(metaclass=Singleton):
         # elif device_type == "switch":
         #     pin_number = "1"
 
+        # print("Discover By Rooms URL: ")
         if self.token is not None:
             response = requests.get(
-                f"http://ezcentral.buildtrack.in/btadmin/index.php/restappservice/getRoomPinDetails/userid/{self.user_id}/roleID/{self.role_id}/token/{self.token}/format/json"
+                f"http://ezcentral.buildtrack.in/btadmin/index.php/restappservice/getRoomPinDetails/userid/{self.user_id}/roleID/{self.role_id}/token/{self.token}/format/json",
+                headers={"referer": "https://ezcentral.buildtrack.in/login.html"}
             )
             # remove the empty rooms
             filtered_rooms = filter(
@@ -124,7 +126,8 @@ class BuildTrackAPI(metaclass=Singleton):
         """Load all the parent devices in the account."""
         if self.token is not None:
             response = requests.get(
-                f"http://ezcentral.buildtrack.in/btadmin/index.php/restappservice/index/cid/10/rid/{self.role_id}/uid/{self.user_id}/format/json"
+                f"http://ezcentral.buildtrack.in/btadmin/index.php/restappservice/index/cid/10/rid/{self.role_id}/uid/{self.user_id}/format/json",
+                headers={"referer": "https://ezcentral.buildtrack.in/login.html"}
             )
             self.device_parent_ids_map = {
                 device["ID"]: device for device in response.json()
@@ -135,7 +138,8 @@ class BuildTrackAPI(metaclass=Singleton):
         """Load all devices raw details."""
         if self.token is not None:
             response = requests.get(
-                f"http://ezcentral.buildtrack.in/btadmin/index.php/buildtrackrestappservice/getCatRecordForAssign/format/json?type=11&userid={self.user_id}&roleID={self.role_id}&token={self.token}&recordID=&defineFields=&filterID=&hierarchyFilter=&is_template=0&action=0&is_association=0&recordsonly=1&sync=1"
+                f"http://ezcentral.buildtrack.in/btadmin/index.php/buildtrackrestappservice/getCatRecordForAssign/format/json?type=11&userid={self.user_id}&roleID={self.role_id}&token={self.token}&recordID=&defineFields=&filterID=&hierarchyFilter=&is_template=0&action=0&is_association=0&recordsonly=1&sync=1",
+                headers={"referer": "https://ezcentral.buildtrack.in/login.html"}
             )
             self.device_raw_details_map = {
                 device["ID"]: device for device in response.json()
