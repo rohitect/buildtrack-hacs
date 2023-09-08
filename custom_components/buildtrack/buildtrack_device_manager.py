@@ -127,6 +127,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             topic = str(msg.topic)
             message = str(msg.payload.decode("utf-8"))
             decoded_message = json.loads(message)
+            print(decoded_message)
             self.update_switch_state(decoded_message)
 
         def on_log(client, userdata, level, buf):
