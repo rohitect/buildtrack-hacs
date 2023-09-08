@@ -4,6 +4,8 @@ import json
 import threading
 import websocket
 import os
+import string
+import random
 
 
 class BuildTrackDeviceManager(metaclass=Singleton):
@@ -31,6 +33,10 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         self.mqtt_thread = None
         self.connect_to_buildtrack_tcp_server()
         self.connect_to_buildtrack_mqtt_server()
+    @staticmethod
+    def generateRandomClientName(N=16):
+        return ''.join(random.choices(string.ascii_uppercase +
+                                      string.digits, k=N))
 
     def listen_to_tcp_device_status(self, mac_id):
         """Listen to buildtrack device status over websocket."""
@@ -90,13 +96,16 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             self.listen_to_tcp_device_status(device_mac)
 
     def connect_to_buildtrack_mqtt_server(self):
-        self.mqtt_client = mqtt.Client(client_id="mqttx_a69a2eff")
+        self.mqtt_client = mqtt.Client(client_id=BuildTrackDeviceManager.generateRandomClientName())
 
         # The callback for when the client receives a CONNACK response from the server.
         def on_connect(client, userdata, flags, rc):
             print("Buildtrack MQTT Server connected with result code " + str(rc))
             # Subscribing in on_connect() means that if we lose the connection and
             # reconnect then subscriptions will be renewed.
+            
+            # this is mainly to support websocket via mqtt
+            client.publish("WillMsg", payload="Connection Closed abnormally..!")
 
 
             self.is_mqtt_connected = True
