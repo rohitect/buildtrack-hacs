@@ -300,24 +300,36 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def set_cover_state(self, mac_id, pin_number, state="open"):
         """Set Cover state"""
-        param = {"pin": pin_number, "state": state, "speed": "0"}
-
-        message = json.dumps(
-            [
-                "event_push",
-                json.dumps(
-                    {
-                        "macID": mac_id,
-                        "event": "execute",
-                        "command": "execute",
-                        "params": [param],
-                        "passcode": mac_id,
-                        "to": mac_id,
-                    }
-                ),
-            ]
-        )
-        self.websocket_connection.send("42" + message)
+        if mac_id in self.device_mqtt_mac_ids:
+            command = {
+                "macID": mac_id,
+                "event": "execute",
+                "command": "execute",
+                "params": [{"pin": pin_number, "state": state}],
+                "passcode": mac_id,
+                "to": mac_id,
+            }
+            self.mqtt_client.publish(f"{mac_id}/execute", payload=json.dumps(
+                command
+            ))
+        else:
+            param = {"pin": pin_number, "state": state, "speed": "0"}
+            message = json.dumps(
+                [
+                    "event_push",
+                    json.dumps(
+                        {
+                            "macID": mac_id,
+                            "event": "execute",
+                            "command": "execute",
+                            "params": [param],
+                            "passcode": mac_id,
+                            "to": mac_id,
+                        }
+                    ),
+                ]
+            )
+            self.websocket_connection.send("42" + message)
         self.manual_device_state_update(mac_id, pin_number, False)
 
     @classmethod
