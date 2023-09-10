@@ -8,8 +8,8 @@ import string
 import random
 import logging
 
-
 _LOGGER = logging.getLogger(__name__)
+
 
 class BuildTrackDeviceManager(metaclass=Singleton):
     """This is class which maintains the state of all buildtrack devices."""
@@ -36,6 +36,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         self.mqtt_thread = None
         self.connect_to_buildtrack_tcp_server()
         self.connect_to_buildtrack_mqtt_server()
+
     @staticmethod
     def generateRandomClientName(N=16):
         return ''.join(random.choices(string.ascii_uppercase +
@@ -106,15 +107,17 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             _LOGGER.debug("Buildtrack MQTT Server connected with result code " + str(rc))
             # Subscribing in on_connect() means that if we lose the connection and
             # reconnect then subscriptions will be renewed.
-            
-            # this is mainly to support websocket via mqtt
-            client.publish("WillMsg", payload="Connection Closed abnormally..!")
 
+            # this is mainly to support websocket via mqtt
+            _LOGGER.debug("Sending WillMsg ....")
+            client.publish("WillMsg", payload="Connection Closed abnormally..!")
 
             self.is_mqtt_connected = True
             for mac_id in self.device_mqtt_mac_ids:
+                _LOGGER.debug("MQTT: Subscribing to status for " + str(mac_id))
                 client.subscribe(mac_id + "/status")
 
+                _LOGGER.debug("MQTT: Fetching Initial Device Status " + str(mac_id))
                 # Publish the below message to fetch the device status
                 client.publish(f"{mac_id}/execute", payload=json.dumps({
                     "macID": mac_id,
