@@ -9,6 +9,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class BuildTrackAPI(metaclass=Singleton):
     """This is the wrapper class to interact with the Build Track Server."""
 
@@ -236,8 +237,9 @@ class BuildTrackAPI(metaclass=Singleton):
         # _LOGGER.debug(f"{mac_id} {device_id}")
         # check if the device is on MQTT or not
         if self.is_device_on_mqtt(self.devices_by_room[device_id]["parentrecordID"]):
-            # _LOGGER.debug(f"{mac_id} is on MQTT")
+            _LOGGER.debug(f"{mac_id} is on MQTT")
             self.device_state_manager.device_mqtt_mac_ids.append(mac_id)
+            self.device_state_manager.mqtt_subscribe_to_device_state(mac_id)
         else:
             # _LOGGER.debug(f"{mac_id} is on TCP")
             self.device_state_manager.listen_to_tcp_device_status(mac_id)

@@ -99,6 +99,22 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         for device_mac in tmp_list:
             self.listen_to_tcp_device_status(device_mac)
 
+    def mqtt_subscribe_to_device_state(self, mac_id):
+        if self.is_mqtt_connected:
+            _LOGGER.debug("MQTT: Subscribing to status for " + str(mac_id))
+            self.mqtt_client.subscribe(mac_id + "/status")
+
+            _LOGGER.debug("MQTT: Fetching Initial Device Status " + str(mac_id))
+            # Publish the below message to fetch the device status
+            self.mqtt_client.publish(f"{mac_id}/execute", payload=json.dumps({
+                "macID": mac_id,
+                "event": "execute",
+                "command": "deviceStatus",
+                "params": 0,
+                "passcode": mac_id,
+                "to": mac_id
+            }))
+
     def connect_to_buildtrack_mqtt_server(self):
         self.mqtt_client = mqtt.Client(client_id=BuildTrackDeviceManager.generateRandomClientName())
 
@@ -112,9 +128,11 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             _LOGGER.debug("Sending WillMsg ....")
             client.publish("WillMsg", payload="Connection Closed abnormally..!")
 
+            _LOGGER.debug("MQTT (On Connect): Subscribing to " + str(len(self.device_mqtt_mac_ids))+" devices statuses...")
+
             self.is_mqtt_connected = True
             for mac_id in self.device_mqtt_mac_ids:
-                _LOGGER.debug("MQTT: Subscribing to status for " + str(mac_id))
+                _LOGGER.debug("MQTT (On Connect): Subscribing to status for " + str(mac_id))
                 client.subscribe(mac_id + "/status")
 
                 _LOGGER.debug("MQTT: Fetching Initial Device Status " + str(mac_id))
