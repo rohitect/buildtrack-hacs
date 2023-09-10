@@ -5,7 +5,9 @@ import requests
 
 from .buildtrack_device_manager import BuildTrackDeviceManager
 from .common import Singleton
+import logging
 
+_LOGGER = logging.getLogger(__name__)
 
 class BuildTrackAPI(metaclass=Singleton):
     """This is the wrapper class to interact with the Build Track Server."""
@@ -58,8 +60,8 @@ class BuildTrackAPI(metaclass=Singleton):
                 return True
             return False
         except ConnectionError as connection_error:
-            print("Exception occurred")
-            print(connection_error)
+            _LOGGER.debug("Exception occurred")
+            _LOGGER.debug(connection_error)
             return False
 
     def get_first_name(self):
@@ -74,7 +76,7 @@ class BuildTrackAPI(metaclass=Singleton):
         # elif device_type == "switch":
         #     pin_number = "1"
 
-        # print("Discover By Rooms URL: ")
+        # _LOGGER.debug("Discover By Rooms URL: ")
         if self.token is not None:
             response = requests.get(
                 f"http://ezcentral.buildtrack.in/btadmin/index.php/restappservice/getRoomPinDetails/userid/{self.user_id}/roleID/{self.role_id}/token/{self.token}/format/json",
@@ -100,7 +102,7 @@ class BuildTrackAPI(metaclass=Singleton):
             self.devices_by_room = {
                 device["ID"]: device for device in all_active_devices
             }
-            # print(all_active_devices)
+            # _LOGGER.debug(all_active_devices)
             return all_active_devices
         return []
 
@@ -132,7 +134,7 @@ class BuildTrackAPI(metaclass=Singleton):
             self.device_parent_ids_map = {
                 device["ID"]: device for device in response.json()
             }
-            # print(response.json())
+            # _LOGGER.debug(response.json())
 
     def load_all_devices_raw_details(self):
         """Load all devices raw details."""
@@ -144,7 +146,7 @@ class BuildTrackAPI(metaclass=Singleton):
             self.device_raw_details_map = {
                 device["ID"]: device for device in response.json()
             }
-            # print(response.json())
+            # _LOGGER.debug(response.json())
 
     def get_mac_id_for_device(self, device_id: str):
         """Return back the mac id for the device."""
@@ -230,14 +232,14 @@ class BuildTrackAPI(metaclass=Singleton):
             self.devices_by_room[device_id]["parentrecordID"]
         )
 
-        # print("----------")
-        # print(f"{mac_id} {device_id}")
+        # _LOGGER.debug("----------")
+        # _LOGGER.debug(f"{mac_id} {device_id}")
         # check if the device is on MQTT or not
         if self.is_device_on_mqtt(self.devices_by_room[device_id]["parentrecordID"]):
-            # print(f"{mac_id} is on MQTT")
+            # _LOGGER.debug(f"{mac_id} is on MQTT")
             self.device_state_manager.device_mqtt_mac_ids.append(mac_id)
         else:
-            # print(f"{mac_id} is on TCP")
+            # _LOGGER.debug(f"{mac_id} is on TCP")
             self.device_state_manager.listen_to_tcp_device_status(mac_id)
 
 # 42["event_push","{\"macID\":\"40F5202635A3\",\"event\":\"execute\",\"command\":\"execute\",\"params\":[{\"pin\":\"1\",\"state\":\"close\",\"speed\":\"0\"}],\"passcode\":\"40F5202635A3\",\"to\":\"40F5202635A3\"}"] open | stop

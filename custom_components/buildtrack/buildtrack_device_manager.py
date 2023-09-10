@@ -6,7 +6,10 @@ import websocket
 import os
 import string
 import random
+import logging
 
+
+_LOGGER = logging.getLogger(__name__)
 
 class BuildTrackDeviceManager(metaclass=Singleton):
     """This is class which maintains the state of all buildtrack devices."""
@@ -71,15 +74,15 @@ class BuildTrackDeviceManager(metaclass=Singleton):
                 self.websocket_connection.send("42" + message)
             except Exception as ex:
                 self.pending_listening_devices.add(mac_id)
-                print("Exception while registering device listener for " + mac_id)
-                print(ex)
+                _LOGGER.debug("Exception while registering device listener for " + mac_id)
+                _LOGGER.debug(ex)
 
     def manual_device_state_update(self, mac_id, pin_number, state: bool):
         """Update the device status until the websocket response arrives manually."""
         if mac_id in self.mac_id_wise_state:
-            # print(self.mac_id_wise_state[mac_id])
-            # print(str(pin_number))
-            # print(state)
+            # _LOGGER.debug(self.mac_id_wise_state[mac_id])
+            # _LOGGER.debug(str(pin_number))
+            # _LOGGER.debug(state)
 
             self.mac_id_wise_state[mac_id][f"{pin_number}"]["state"] = 1 if state else 0
 
@@ -100,7 +103,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
         # The callback for when the client receives a CONNACK response from the server.
         def on_connect(client, userdata, flags, rc):
-            print("Buildtrack MQTT Server connected with result code " + str(rc))
+            _LOGGER.debug("Buildtrack MQTT Server connected with result code " + str(rc))
             # Subscribing in on_connect() means that if we lose the connection and
             # reconnect then subscriptions will be renewed.
             
@@ -127,14 +130,14 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             topic = str(msg.topic)
             message = str(msg.payload.decode("utf-8"))
             decoded_message = json.loads(message)
-            print(decoded_message)
+            _LOGGER.debug(decoded_message)
             self.update_switch_state(decoded_message)
 
         def on_log(client, userdata, level, buf):
-            print("log: ", buf)
+            _LOGGER.debug("log: ", buf)
 
         def on_disconnect(client, userdata, rc):
-            print("Buildtrack MQTT Server Disconnected")
+            _LOGGER.debug("Buildtrack MQTT Server Disconnected")
             self.is_mqtt_connected = False
             self.connect_to_buildtrack_mqtt_server()
 
@@ -143,7 +146,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         # self.mqtt_client.on_log = on_log
         self.mqtt_client.disconnect_callback = on_disconnect
         self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
-        print(f"CWD : {os.getcwd()}")
+        _LOGGER.debug(f"CWD : {os.getcwd()}")
         # TODO - Enable this for development
         # self.mqtt_client.tls_set(ca_certs=f"{os.getcwd()}/config/custom_components/buildtrack/ms.buildtrack.in.cer")
 
@@ -217,14 +220,14 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def update_switch_state(self, decoded_message):
         """Update the switch state on the buildtrack server."""
-        # print(decoded_message)
+        # _LOGGER.debug(decoded_message)
         if decoded_message["command"] == "status":
             if decoded_message["uid"] not in self.mac_id_wise_state:
                 # if decoded_message["uid"] == "40F5200DCF2D":
-                # print(decoded_message["uid"] + " not in mac_id_wise_state")
+                # _LOGGER.debug(decoded_message["uid"] + " not in mac_id_wise_state")
                 self.mac_id_wise_state[decoded_message["uid"]] = {}
             # if decoded_message["uid"] == "40F5200DCF2D":
-            # print(decoded_message)
+            # _LOGGER.debug(decoded_message)
             for index, item in enumerate(decoded_message["pin"]):
                 if isinstance(item, dict):
                     self.mac_id_wise_state[decoded_message["uid"]][f"{index + 1}"] = {
@@ -238,7 +241,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def switch_on(self, mac_id, pin_number, speed=None):
         """Switch on the device"""
-        print(f"Switching on {mac_id} with speed={speed}")
+        _LOGGER.debug(f"Switching on {mac_id} with speed={speed}")
         param = {"pin": pin_number, "state": "on"}
         if speed is not None:
             param["speed"] = str(speed)
@@ -268,7 +271,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
     def switch_off(self, mac_id, pin_number, speed=None):
         """Switch Off device"""
-        print(f"Switching off {mac_id}")
+        _LOGGER.debug(f"Switching off {mac_id}")
         param = {"pin": pin_number, "state": "off"}
         if speed is not None:
             param["speed"] = str(speed)
@@ -281,12 +284,12 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             "to": mac_id,
         }
         if mac_id in self.device_mqtt_mac_ids:
-            # print("MQTT Device")
+            # _LOGGER.debug("MQTT Device")
             self.mqtt_client.publish(f"{mac_id}/execute", payload=json.dumps(
                 command
             ))
         else:
-            # print("TCP Device")
+            # _LOGGER.debug("TCP Device")
             message = json.dumps(
                 [
                     "event_push",
@@ -335,16 +338,16 @@ class BuildTrackDeviceManager(metaclass=Singleton):
     @classmethod
     def on_error(self, websocket_con, error):
         """Handle websocket error."""
-        print(error)
+        _LOGGER.debug(error)
 
     def on_close(self, websocket_con, close_status_code, close_msg):
         """Handle websocket closed."""
-        print("### closed ###")
+        _LOGGER.debug("### closed ###")
         self.is_websocket_connected = False
         self.connect_to_buildtrack_tcp_server()
 
     def on_open(self, websocket_con):
         """Handle websocket connection open."""
-        print("Connected to buildtrack server....")
+        _LOGGER.debug("Connected to buildtrack server....")
         websocket_con.send(f'42["login","{self.user_id}"]')
         self.register_all_tcp_devices_listeners()
