@@ -145,7 +145,7 @@ class BuildTrackFanEntity(FanEntity):
         """Switch on the device."""
         if percentage is not None:
             await self.async_set_percentage( percentage)
-        elif preset_mode != None:
+        elif preset_mode is not None:
             await self.async_set_preset_mode(preset_mode)
         else:
             await self.hub.switch_on(self.id, speed=speed)
