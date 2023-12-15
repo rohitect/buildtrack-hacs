@@ -141,7 +141,9 @@ class BuildTrackFanEntity(FanEntity):
             },
         )
 
-    async def async_turn_on(self, speed, percentage, preset_mode, **kwargs) -> None:
+    async def async_turn_on(self,
+                            percentage: int | None = None,
+                            preset_mode: str | None = None, **kwargs) -> None:
         """Switch on the device."""
         if percentage is not None:
             await self.async_set_percentage( percentage)
