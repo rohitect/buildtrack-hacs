@@ -150,7 +150,7 @@ class BuildTrackFanEntity(FanEntity):
         elif preset_mode is not None:
             await self.async_set_preset_mode(preset_mode)
         else:
-            await self.hub.switch_on(self.id, speed=speed)
+            await self.hub.switch_on(self.id, speed=percentage)
             
         self.hass.bus.fire(
             event_type="buildtrack_fan_state_change",
@@ -158,7 +158,6 @@ class BuildTrackFanEntity(FanEntity):
                 "integration": "buildtrack",
                 "entity_name": self.name,
                 "state": "on",
-                "speed": speed,
                 "percentage": percentage,
                 "preset_mode": preset_mode
             },
