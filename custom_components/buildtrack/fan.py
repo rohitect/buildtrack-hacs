@@ -141,20 +141,29 @@ class BuildTrackFanEntity(FanEntity):
             },
         )
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, speed, percentage, preset_mode, **kwargs) -> None:
         """Switch on the device."""
-        await self.hub.switch_on(self.id)
+        if percentage is not None:
+            self.async_set_percentage(self, percentage)
+        elif preset_mode != None:
+            self.async_set_preset_mode(preset_mode)
+        else:
+            await self.hub.switch_on(self.id, speed=speed)
+            
         self.hass.bus.fire(
             event_type="buildtrack_fan_state_change",
             event_data={
                 "integration": "buildtrack",
                 "entity_name": self.name,
                 "state": "on",
+                "speed": speed,
+                "percentage": percentage,
+                "preset_mode": preset_mode
             },
         )
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Switche off the device."""
+        """Switch off the device."""
         await self.hub.switch_off(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_fan_state_change",
