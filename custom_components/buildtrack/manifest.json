@@ -1,5 +1,5 @@
 {
-"version":"0.0.20",
+"version":"0.0.21",
   "domain": "buildtrack",
   "name": "Buildtrack",
   "config_flow": true,
@@ -7,7 +7,6 @@
   "requirements": [
     "websocket-client==1.5.1",
     "requests==2.31.0",
-    "aiohttp==3.9.5",
     "paho-mqtt==1.6.1"
   ],
   "ssdp": [],
