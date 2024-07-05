@@ -1,12 +1,11 @@
 {
-"version":"0.0.21",
+  "version":"0.0.22",
   "domain": "buildtrack",
   "name": "Buildtrack",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/buildtrack",
   "requirements": [
     "websocket-client==1.5.1",
-    "requests==2.31.0",
     "paho-mqtt==1.6.1"
   ],
   "ssdp": [],
