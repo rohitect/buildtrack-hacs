@@ -83,7 +83,7 @@ class BuildTrackFanEntity(FanEntity):
 
     @property
     def supported_features(self) -> int:
-        return SUPPORT_SET_SPEED | SUPPORT_PRESET_MODE 
+        return SET_SPEED | PRESET_MODE 
 
     @property
     def oscillating(self) -> bool:
