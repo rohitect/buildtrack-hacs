@@ -8,7 +8,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import ToggleEntity
-from homeassistant.components.fan import SUPPORT_PRESET_MODE, SUPPORT_SET_SPEED, FanEntity
+from homeassistant.components.fan import FanEntityFeature, FanEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .buildtrack_api import BuildTrackAPI
@@ -83,7 +83,7 @@ class BuildTrackFanEntity(FanEntity):
 
     @property
     def supported_features(self) -> int:
-        return SET_SPEED | PRESET_MODE 
+        return FanEntityFeature.SET_SPEED | FanEntityFeature.PRESET_MODE 
 
     @property
     def oscillating(self) -> bool:
