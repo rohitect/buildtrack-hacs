@@ -159,7 +159,7 @@ class BuildTrackAPI(metaclass=Singleton):
         try:
             if device_id in self.device_parent_ids_map and (self.device_parent_ids_map[device_id]["product_info"]).strip() != "":
                 decoded = json.loads(self.device_parent_ids_map[device_id]["product_info"])
-                return not ("mqttState" in decoded and "0" in decoded["mqttState"])
+                return ("mqttState" in decoded and "1" in decoded["mqttState"])
         except:
             return False
         return False
