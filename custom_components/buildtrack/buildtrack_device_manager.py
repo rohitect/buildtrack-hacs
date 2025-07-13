@@ -177,7 +177,8 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         cert_file = open("mqtt_website_certificate.cer", "w")
         cert_file.write(mqtt_website_certificate)
         cert_file.close()
-        self.mqtt_client.tls_set(ca_certs="mqtt_website_certificate.cer")
+        # self.mqtt_client.tls_set(ca_certs="mqtt_website_certificate.cer")
+        self.mqtt_client.tls_set(certfile=None, keyfile=None, cert_reqs=mqtt.ssl.CERT_NONE)
 
         self.mqtt_client.tls_insecure_set(True)
         self.mqtt_client.connect("ms.buildtrack.in", 1899, 60)
