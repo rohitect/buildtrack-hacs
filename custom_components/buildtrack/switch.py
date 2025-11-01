@@ -48,6 +48,7 @@ class BuildtrackSwitch(SwitchEntity):
         self.room_name = switch["room_name"]
         self.room_id = switch["room_id"]
         self.id = switch["ID"]
+        self.unique_id = f"buildtrack_{self.id}"
         self.switch_name = switch["label"]
         self.switch_pin_type = switch["pin_type"]
         self.hub.listen_device_state(self.id)
