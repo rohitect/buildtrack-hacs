@@ -65,6 +65,7 @@ class BuildTrackFanEntity(FanEntity):
         self.id = fan["ID"]
         self.fan_name = fan["label"]
         self.fan_pin_type = fan["pin_type"]
+        self.unique_id = f"buildtrack_{self.id}"
         # print(f"[FAN] Register listen to {self.room_name} {self.fan_name}...")
         self.hub.listen_device_state(self.id)
         # self.async_schedule_update_ha_state()
