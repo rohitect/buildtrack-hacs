@@ -46,6 +46,7 @@ class BuildtrackLight(LightEntity):
         self.room_name = light["room_name"]
         self.room_id = light["room_id"]
         self.id = light["ID"]
+        self.unique_id = f"buildtrack_{self.id}"
         self.light_name = light["label"]
         self.light_pin_type = light["pin_type"]
         self.hub.listen_device_state(self.id)
