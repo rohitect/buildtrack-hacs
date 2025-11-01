@@ -14,12 +14,14 @@ PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.FAN, Platform.COVER]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Buildtrack from a config entry."""
-    # Store an API object for your platforms to access
-    # hass.data[DOMAIN][entry.entry_id] = MyApi(...)
     hub = BuildTrackAPI()
     hub.set_credentials(entry.data["username"], entry.data["password"])
     hub.set_mqtt_creds(entry.data["mqtt_username"], entry.data["mqtt_password"])
-    await hass.async_add_executor_job(hub.authenticate_user)
+
+    # Authenticate user (now async)
+    if not await hub.authenticate_user():
+        return False
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -1,15 +1,17 @@
-"""This is a wrapper class to interact with the build track fan."""
-import logging
-from os import pread
-from typing import Any
-from homeassistant.util.percentage import ordered_list_item_to_percentage, percentage_to_ordered_list_item
+"""Platform for fan integration."""
+from __future__ import annotations
 
-from homeassistant.components.switch import SwitchEntity
+import logging
+from typing import Any
+
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import ToggleEntity
-from homeassistant.components.fan import FanEntityFeature, FanEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util.percentage import (
+    ordered_list_item_to_percentage,
+    percentage_to_ordered_list_item,
+)
 
 from .buildtrack_api import BuildTrackAPI
 from .const import DOMAIN

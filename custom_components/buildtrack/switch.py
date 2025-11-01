@@ -1,5 +1,8 @@
-"""This is a wrapper class to interact with the build track switch."""
+"""Platform for switch integration."""
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry

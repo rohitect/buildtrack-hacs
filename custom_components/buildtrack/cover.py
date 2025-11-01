@@ -1,13 +1,13 @@
-"""This is a wrapper class to interact with the build track curtain."""
+"""Platform for cover integration."""
+from __future__ import annotations
+
 import logging
-from os import pread
 from typing import Any
 
 from homeassistant.components.cover import CoverDeviceClass, CoverEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_CLOSED, STATE_PAUSED
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import ToggleEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .buildtrack_api import BuildTrackAPI
@@ -68,7 +68,8 @@ class BuildTrackCurtainEntity(CoverEntity):
     def device_class(self) -> CoverDeviceClass:
         return CoverDeviceClass.CURTAIN
 
-    def open_cover(self, **kwargs: Any) -> None:
+    async def async_open_cover(self, **kwargs: Any) -> None:
+        """Open the cover."""
         self.hub.open_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
@@ -79,7 +80,8 @@ class BuildTrackCurtainEntity(CoverEntity):
             },
         )
 
-    def close_cover(self, **kwargs: Any) -> None:
+    async def async_close_cover(self, **kwargs: Any) -> None:
+        """Close the cover."""
         self.hub.close_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
@@ -90,7 +92,8 @@ class BuildTrackCurtainEntity(CoverEntity):
             },
         )
 
-    def stop_cover(self, **kwargs):
+    async def async_stop_cover(self, **kwargs: Any) -> None:
+        """Stop the cover."""
         self.hub.stop_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
