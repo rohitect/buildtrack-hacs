@@ -46,6 +46,7 @@ class BuildTrackCurtainEntity(CoverEntity):
         self.room_name = curtain["room_name"]
         self.room_id = curtain["room_id"]
         self.id = curtain["ID"]
+        self.unique_id = f"buildtrack_{self.id}"
         self.curtain_name = curtain["label"]
         self.curtain_pin_type = curtain["pin_type"]
         self.hub.listen_device_state(self.id)
