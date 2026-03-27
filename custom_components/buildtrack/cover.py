@@ -53,17 +53,17 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
-        _LOGGER.info("Cover '%s' added to hass, registering state callback", self.name)
+        _LOGGER.debug("Cover '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
-        _LOGGER.info("Cover '%s' removed from hass, unregistering state callback", self.name)
+        _LOGGER.debug("Cover '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
-        _LOGGER.info("Cover '%s' received state update", self.name)
+        _LOGGER.debug("Cover '%s' received state update", self.name)
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property

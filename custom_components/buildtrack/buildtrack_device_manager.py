@@ -480,7 +480,7 @@ class BuildTrackDeviceManager:
 
     def switch_on(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch on the device."""
-        _LOGGER.info("switch_on: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
+        _LOGGER.debug("switch_on: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
 
         # Build command
         command_json = self._build_command(mac_id, pin_number, "on", speed)
@@ -496,7 +496,7 @@ class BuildTrackDeviceManager:
 
     def switch_off(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch off the device."""
-        _LOGGER.info("switch_off: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
+        _LOGGER.debug("switch_off: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
 
         # Build command
         command_json = self._build_command(mac_id, pin_number, "off", speed)
@@ -512,7 +512,7 @@ class BuildTrackDeviceManager:
 
     def set_cover_state(self, mac_id: str, pin_number: str, state: str = "open") -> None:
         """Set cover state (open/close/stop)."""
-        _LOGGER.info("set_cover_state: mac=%s pin=%s state=%s", mac_id, pin_number, state)
+        _LOGGER.debug("set_cover_state: mac=%s pin=%s state=%s", mac_id, pin_number, state)
         command_json = self._build_command(mac_id, pin_number, state, speed=0)
 
         # Call local HTTP API

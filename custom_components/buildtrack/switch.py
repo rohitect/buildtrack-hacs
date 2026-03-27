@@ -50,17 +50,17 @@ class BuildtrackSwitch(SwitchEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
-        _LOGGER.info("Switch '%s' added to hass, registering state callback", self.name)
+        _LOGGER.debug("Switch '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
-        _LOGGER.info("Switch '%s' removed from hass, unregistering state callback", self.name)
+        _LOGGER.debug("Switch '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
-        _LOGGER.info("Switch '%s' received state update, is_on=%s", self.name, self.hub.is_device_on(self.id))
+        _LOGGER.debug("Switch '%s' received state update, is_on=%s", self.name, self.hub.is_device_on(self.id))
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property

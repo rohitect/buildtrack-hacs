@@ -49,18 +49,17 @@ class BuildTrackFanEntity(FanEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
-        _LOGGER.info("Fan '%s' added to hass, registering state callback", self.name)
+        _LOGGER.debug("Fan '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
-        _LOGGER.info("Fan '%s' removed from hass, unregistering state callback", self.name)
+        _LOGGER.debug("Fan '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
-        state = self.hub.get_device_state(self.id)
-        _LOGGER.info("Fan '%s' received state update: %s", self.name, state)
+        _LOGGER.debug("Fan '%s' received state update: %s", self.name, self.hub.get_device_state(self.id))
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
