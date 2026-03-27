@@ -135,14 +135,14 @@ class BuildTrackAPI:
                         api_reference=self
                     )
                     return True
+        except Exception as ex:
+            _LOGGER.error(f"Authentication exception: {ex}")
+            return False
 
     def start_connections(self) -> None:
         """Start MQTT and WebSocket connections. Must be called from executor thread."""
         if self.device_state_manager is not None:
             self.device_state_manager.connect()
-        except Exception as ex:
-            _LOGGER.error(f"Authentication exception: {ex}")
-            return False
 
     def get_first_name(self) -> str | None:
         """Respond with the first name."""
