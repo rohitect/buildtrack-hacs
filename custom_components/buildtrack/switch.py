@@ -50,14 +50,17 @@ class BuildtrackSwitch(SwitchEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
+        _LOGGER.info("Switch '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
+        _LOGGER.info("Switch '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
+        _LOGGER.info("Switch '%s' received state update, is_on=%s", self.name, self.hub.is_device_on(self.id))
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
@@ -84,7 +87,8 @@ class BuildtrackSwitch(SwitchEntity):
         return self.hub.is_device_on(self.id)
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Switche on the device."""
+        """Turn on the device."""
+        _LOGGER.info("Turning on switch '%s' (id=%s)", self.name, self.id)
         await self.hub.switch_on(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_switch_state_change",
@@ -96,7 +100,8 @@ class BuildtrackSwitch(SwitchEntity):
         )
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Switche off the device."""
+        """Turn off the device."""
+        _LOGGER.info("Turning off switch '%s' (id=%s)", self.name, self.id)
         await self.hub.switch_off(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_switch_state_change",
@@ -108,5 +113,6 @@ class BuildtrackSwitch(SwitchEntity):
         )
 
     async def async_toggle(self, **kwargs) -> None:
-        """Toggles the device state."""
+        """Toggle the device state."""
+        _LOGGER.info("Toggling switch '%s' (id=%s)", self.name, self.id)
         return await self.hub.toggle_device(self.id)

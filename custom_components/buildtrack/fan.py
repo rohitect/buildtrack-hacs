@@ -49,14 +49,18 @@ class BuildTrackFanEntity(FanEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
+        _LOGGER.info("Fan '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
+        _LOGGER.info("Fan '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
+        state = self.hub.get_device_state(self.id)
+        _LOGGER.info("Fan '%s' received state update: %s", self.name, state)
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
@@ -129,6 +133,7 @@ class BuildTrackFanEntity(FanEntity):
         await self.async_set_percentage(current_speed - percentage_step)
 
     async def async_set_percentage(self, percentage: int) -> None:
+        _LOGGER.info("Setting fan '%s' speed to %d%% (id=%s)", self.name, percentage, self.id)
         await self.hub.switch_on(self.id, percentage)
         self.hass.bus.fire(
             event_type="buildtrack_fan_state_change",
@@ -142,7 +147,8 @@ class BuildTrackFanEntity(FanEntity):
     async def async_turn_on(self,
                             percentage: int | None = None,
                             preset_mode: str | None = None, **kwargs) -> None:
-        """Switch on the device."""
+        """Turn on the fan."""
+        _LOGGER.info("Turning on fan '%s' (id=%s, percentage=%s, preset=%s)", self.name, self.id, percentage, preset_mode)
         if percentage is not None:
             await self.async_set_percentage( percentage)
         elif preset_mode is not None:
@@ -162,7 +168,8 @@ class BuildTrackFanEntity(FanEntity):
         )
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Switch off the device."""
+        """Turn off the fan."""
+        _LOGGER.info("Turning off fan '%s' (id=%s)", self.name, self.id)
         await self.hub.switch_off(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_fan_state_change",
@@ -174,6 +181,7 @@ class BuildTrackFanEntity(FanEntity):
         )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
+        _LOGGER.info("Setting fan '%s' preset mode to '%s' (id=%s)", self.name, preset_mode, self.id)
         index = self.preset_modes.index(preset_mode)
         if index == 0:
             await self.async_set_percentage(25)

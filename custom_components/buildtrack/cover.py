@@ -53,14 +53,17 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register state update callback when entity is added."""
+        _LOGGER.info("Cover '%s' added to hass, registering state callback", self.name)
         self.hub.register_state_callback(self.id, self._handle_state_update)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister state update callback when entity is removed."""
+        _LOGGER.info("Cover '%s' removed from hass, unregistering state callback", self.name)
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
+        _LOGGER.info("Cover '%s' received state update", self.name)
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
@@ -87,6 +90,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
+        _LOGGER.info("Opening cover '%s' (id=%s)", self.name, self.id)
         await self.hub.open_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
@@ -99,6 +103,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
+        _LOGGER.info("Closing cover '%s' (id=%s)", self.name, self.id)
         await self.hub.close_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
@@ -111,6 +116,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
+        _LOGGER.info("Stopping cover '%s' (id=%s)", self.name, self.id)
         await self.hub.stop_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
