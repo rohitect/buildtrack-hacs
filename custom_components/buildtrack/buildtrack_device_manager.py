@@ -73,7 +73,10 @@ class BuildTrackDeviceManager:
         # State change callbacks: keyed by "{mac_id}_{pin_number}"
         self._state_callbacks: dict[str, list[Callable[[], None]]] = {}
 
-        # Initialize connections
+        # Connections are initialized via connect() to allow running off the event loop
+
+    def connect(self) -> None:
+        """Initialize MQTT and WebSocket connections. Call from executor thread."""
         self.connect_to_buildtrack_tcp_server()
         self.connect_to_buildtrack_mqtt_server()
 
@@ -331,10 +334,8 @@ class BuildTrackDeviceManager:
                 self.update_switch_state(decoded_message)
 
             def on_disconnect(client, userdata, rc):
-                _LOGGER.debug(f"Buildtrack MQTT Server Disconnected with code: {rc}")
+                _LOGGER.warning("Buildtrack MQTT Server Disconnected with code: %s", rc)
                 self.is_mqtt_connected = False
-                if rc != 0:
-                    _LOGGER.debug("Unexpected MQTT disconnection. Will auto-reconnect")
 
             # Set callbacks
             self.mqtt_client.on_connect = on_connect
@@ -452,19 +453,30 @@ class BuildTrackDeviceManager:
                 self._notify_callbacks(mac_id, pin_number)
 
     def _send_command(self, mac_id: str, command_json: str) -> None:
-        """Send command via MQTT or TCP.
+        """Send command via MQTT (with WebSocket fallback) or WebSocket.
 
         Args:
             mac_id: The MAC ID of the device
             command_json: The JSON command string to send
         """
-        if mac_id in self.device_mqtt_mac_ids:
-            _LOGGER.info("Sending command via MQTT to %s: %s", mac_id, command_json)
-            self.mqtt_client.publish(f"{mac_id}/execute", payload=command_json)
+        if mac_id in self.device_mqtt_mac_ids and self.is_mqtt_connected:
+            try:
+                _LOGGER.info("Sending command via MQTT to %s: %s", mac_id, command_json)
+                self.mqtt_client.publish(f"{mac_id}/execute", payload=command_json)
+                return
+            except Exception as ex:
+                _LOGGER.warning("MQTT publish failed for %s, falling back to WebSocket: %s", mac_id, ex)
+
+        # Fallback to WebSocket (or primary for non-MQTT devices)
+        if self.websocket_connection is not None and self.is_websocket_connected:
+            try:
+                _LOGGER.info("Sending command via WebSocket to %s: %s", mac_id, command_json)
+                message = json.dumps(["event_push", command_json])
+                self.websocket_connection.send("42" + message)
+            except Exception as ex:
+                _LOGGER.error("WebSocket send also failed for %s: %s", mac_id, ex)
         else:
-            _LOGGER.info("Sending command via WebSocket to %s: %s", mac_id, command_json)
-            message = json.dumps(["event_push", command_json])
-            self.websocket_connection.send("42" + message)
+            _LOGGER.error("No connection available to send command to %s", mac_id)
 
     def switch_on(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch on the device."""

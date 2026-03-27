@@ -21,6 +21,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await hub.authenticate_user():
         raise ConfigEntryNotReady("Failed to authenticate with Buildtrack")
 
+    # Start MQTT/WebSocket connections off the event loop to avoid blocking
+    await hass.async_add_executor_job(hub.start_connections)
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
