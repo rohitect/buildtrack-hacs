@@ -4,10 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.cover import CoverDeviceClass, CoverEntity
+from homeassistant.components.cover import CoverDeviceClass, CoverEntity, CoverEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_CLOSED, STATE_PAUSED
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .buildtrack_api import BuildTrackAPI
@@ -21,22 +21,21 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Demo config entry."""
+    """Set up Buildtrack cover entities."""
     api: BuildTrackAPI = hass.data[DOMAIN][config_entry.entry_id]
-    # if not await hass.async_add_executor_job(api.authenticate_user):
-    #     _LOGGER.error("Invalid Buildtrack credentials")
-    #     return
     async_add_entities(
         BuildTrackCurtainEntity(hass, api, curtain)
-        for curtain in await hass.async_add_executor_job(api.get_devices_of_type, "curtain")
+        for curtain in api.get_devices_of_type("curtain")
     )
 
 
 class BuildTrackCurtainEntity(CoverEntity):
 
-    percentage: int = 0
-    selected_preset_mode = "Low"
-    preset_modes = ["Very Low", "Low", "Medium", "High", "Very High"]
+    _attr_is_closed: bool | None = None
+    _attr_should_poll = False
+    _attr_supported_features = (
+        CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+    )
 
     def __init__(self, hass, hub, curtain) -> None:
         """Initialize the Buildtrack curtain."""
@@ -46,11 +45,23 @@ class BuildTrackCurtainEntity(CoverEntity):
         self.room_name = curtain["room_name"]
         self.room_id = curtain["room_id"]
         self.id = curtain["ID"]
-        self.unique_id = f"buildtrack_{self.id}"
+        self._attr_unique_id = f"buildtrack_cover_{curtain['ID']}"
         self.curtain_name = curtain["label"]
         self.curtain_pin_type = curtain["pin_type"]
+        self._parent_device = self.hub.get_parent_device_details(self.id)
         self.hub.listen_device_state(self.id)
-        # self.async_schedule_update_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Register state update callback when entity is added."""
+        self.hub.register_state_callback(self.id, self._handle_state_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister state update callback when entity is removed."""
+        self.hub.remove_state_callback(self.id, self._handle_state_update)
+
+    def _handle_state_update(self) -> None:
+        """Handle state update from MQTT/WS (called from background thread)."""
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
     def name(self) -> str:
@@ -58,12 +69,17 @@ class BuildTrackCurtainEntity(CoverEntity):
         return f"{self.room_name} {self.curtain_name}"
 
     @property
-    def should_poll(self) -> bool:
-        return False
-
-    @property
-    def state(self) -> str :
-        return STATE_PAUSED
+    def device_info(self) -> DeviceInfo | None:
+        """Return device info for device grouping."""
+        if not self._parent_device:
+            return None
+        mac_id = self._parent_device.get("mac_id", "")
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac_id)},
+            name=self._parent_device.get("label", f"Buildtrack {mac_id}"),
+            manufacturer="Buildtrack",
+            model=self._parent_device.get("model", None),
+        )
 
     @property
     def device_class(self) -> CoverDeviceClass:
@@ -71,7 +87,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        self.hub.open_cover(self.id)
+        await self.hub.open_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
             event_data={
@@ -83,7 +99,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        self.hub.close_cover(self.id)
+        await self.hub.close_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
             event_data={
@@ -95,7 +111,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
-        self.hub.stop_cover(self.id)
+        await self.hub.stop_cover(self.id)
         self.hass.bus.fire(
             event_type="buildtrack_cover_state_change",
             event_data={

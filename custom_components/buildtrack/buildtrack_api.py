@@ -5,12 +5,12 @@ import json
 import base64
 import time
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import aiohttp
 
 from .buildtrack_device_manager import BuildTrackDeviceManager
-from .common import Singleton
 from .const import (
     API_LOGIN_URL,
     API_USER_ACCOUNT_INFO_URL,
@@ -29,7 +29,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class BuildTrackAPI(metaclass=Singleton):
+class BuildTrackAPI:
     """This is the wrapper class to interact with the Build Track Server."""
 
     def __init__(self) -> None:
@@ -264,6 +264,18 @@ class BuildTrackAPI(metaclass=Singleton):
         pin_number = self.device_raw_details_map[device_id]["pin_number"]
         return mac_id, pin_number
 
+    def get_parent_device_details(self, device_id: str) -> dict[str, Any] | None:
+        """Get the parent device details for a given device.
+
+        Returns dict with mac_id, name, model info, or None if not found.
+        """
+        if device_id not in self.devices_by_room:
+            return None
+        parent_id = self.devices_by_room[device_id].get("parentrecordID")
+        if not parent_id or parent_id not in self.device_parent_ids_map:
+            return None
+        return self.device_parent_ids_map[parent_id]
+
     def get_mac_id_for_device(self, device_id: str) -> str | None:
         """Return back the mac id for the device."""
         if device_id in self.device_parent_ids_map:
@@ -306,17 +318,17 @@ class BuildTrackAPI(metaclass=Singleton):
         mac_id, pin_number = self._get_device_info(device_id)
         self.device_state_manager.switch_off(mac_id, pin_number, speed)
 
-    def open_cover(self, device_id: str) -> None:
+    async def open_cover(self, device_id: str) -> None:
         """Open the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="open")
 
-    def close_cover(self, device_id: str) -> None:
+    async def close_cover(self, device_id: str) -> None:
         """Close the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="close")
 
-    def stop_cover(self, device_id: str) -> None:
+    async def stop_cover(self, device_id: str) -> None:
         """Stop the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="stop")
@@ -334,6 +346,26 @@ class BuildTrackAPI(metaclass=Singleton):
             await self.switch_off(device_id)
         else:
             await self.switch_on(device_id)
+
+    def register_state_callback(
+        self, device_id: str, callback: Callable[[], None]
+    ) -> None:
+        """Register a callback for state changes on a device."""
+        mac_id, pin_number = self._get_device_info(device_id)
+        self.device_state_manager.register_callback(mac_id, pin_number, callback)
+
+    def remove_state_callback(
+        self, device_id: str, callback: Callable[[], None]
+    ) -> None:
+        """Remove a state change callback for a device."""
+        mac_id, pin_number = self._get_device_info(device_id)
+        self.device_state_manager.remove_callback(mac_id, pin_number, callback)
+
+    def shutdown(self) -> None:
+        """Shut down the API and clean up resources."""
+        if self.device_state_manager is not None:
+            self.device_state_manager.disconnect()
+            self.device_state_manager = None
 
     def listen_device_state(self, device_id: str) -> None:
         """Listen for device state."""

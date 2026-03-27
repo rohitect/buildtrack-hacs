@@ -14,7 +14,6 @@ API_RAW_DETAILS_URL = f"{API_BASE_URL}/buildtrackrestappservice/getCatRecordForA
 # HTTP Headers
 REFERER_HEADER = "https://ezcentral.buildtrack.in/login.html"
 CONTENT_TYPE_FORM = "application/x-www-form-urlencoded"
-CONTENT_TYPE_JSON = "text/plain; charset=utf-8"
 
 # MQTT Configuration
 MQTT_BROKER_HOST = "ms.buildtrack.in"
@@ -24,18 +23,12 @@ MQTT_ORIGIN = "https://ezcentral.buildtrack.in"
 MQTT_PROTOCOL = "mqtt"
 MQTT_KEEPALIVE = 10
 MQTT_TIMEOUT = 20
-MQTT_MIN_RECONNECT_DELAY = 1
-MQTT_MAX_RECONNECT_DELAY = 120
 
 # WebSocket Configuration
 WS_URL = "wss://ms.buildtrack.in/service/socket/?authenticate=4nedc2xrPQcphbqH45Eo&EIO=3&transport=websocket"
 WS_ORIGIN = "http://ezcentral.buildtrack.in"
-WS_PING_INTERVAL = 25
-WS_PING_TIMEOUT = 20
-WS_PING_PAYLOAD = "2"
 
 # Timeouts
-HTTP_TIMEOUT = 2
 API_REQUEST_TIMEOUT = 10
 
 # Device Pin Types

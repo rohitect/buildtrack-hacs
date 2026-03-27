@@ -16,79 +16,31 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        # vol.Required("host"): str,
         vol.Required("username"): str,
         vol.Required("password"): str,
-        vol.Required("mqtt_username"): str,
-        vol.Required("mqtt_password"): str,
+        # vol.Required("mqtt_username"): str,
+        # vol.Required("mqtt_password"): str,
     }
 )
 
 
-# class BuildtrackHub:
-#     """Placeholder class to make tests pass."""
-
-#     def __init__(self, username: str, password: str) -> None:
-#         """Initialize."""
-#         self.username = username
-#         self.password = password
-
-#     def authenticate(self, hass: HomeAssistant, username: str, password: str):
-#         """Test if we can authenticate with the host."""
-#         try:
-#             response = requests.post(
-#                 "http://ezcentral.buildtrack.in/btadmin/index.php/commonrestappservice/login/format/json",
-#                 data=f"useremail={username}&userpassword={password}&rememberme=true&type=authenticate",
-#                 headers={
-#                     'content-type': 'application/x-www-form-urlencoded'
-#                 }
-#             )
-#             data = response.json()
-#             return data
-#         except:
-#             raise CannotConnect
-
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
-    # validate the data can be used to set up a connection.
-
-    # If your PyPI package is not built with async, pass your methods
-    # to the executor:
-    # await hass.async_add_executor_job(
-    #     your_validate_func, data["username"], data["password"]
-    # )
-    print(data)
+    """Validate the user input allows us to connect."""
     hub = BuildTrackAPI()
     hub.set_credentials(data["username"], data["password"])
-    hub.set_mqtt_creds(data["mqtt_username"], data["mqtt_password"])
+    hub.set_mqtt_creds(data.get("mqtt_username", ""), data.get("mqtt_password", ""))
 
-    # if not await hass.async_add_executor_job(hub.authenticate,hass,data["username"], data["password"]):
-    is_authenticated = await hass.async_add_executor_job(hub.authenticate_user)
-
-    if not is_authenticated:
-        # api = BuildTrackAPI(data['username'],data['password'])
-        # if not await hass.async_add_executor_job(api.authenticate_user)):
+    if not await hub.authenticate_user():
         raise InvalidAuth
 
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
-
-    # Return info that you want to store in the config entry.
     return {
         "title": f"{hub.get_first_name()}'s Buildtrack",
         "username": data["username"],
         "password": data["password"],
-        "mqtt_username": data["mqtt_username"],
-        "mqtt_password": data["mqtt_password"],
+        "mqtt_username": data.get("mqtt_username", ""),
+        "mqtt_password": data.get("mqtt_password", ""),
     }
 
 

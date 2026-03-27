@@ -2,16 +2,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
-)
 
 from .buildtrack_api import BuildTrackAPI
 from .const import DOMAIN
@@ -24,34 +20,16 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Demo config entry."""
+    """Set up Buildtrack fan entities."""
     api: BuildTrackAPI = hass.data[DOMAIN][config_entry.entry_id]
-    # if not await hass.async_add_executor_job(api.authenticate_user):
-    #     _LOGGER.error("Invalid Buildtrack credentials")
-    #     return
     async_add_entities(
         BuildTrackFanEntity(hass, api, fan)
-        for fan in await hass.async_add_executor_job(api.get_devices_of_type, "fan")
+        for fan in api.get_devices_of_type("fan")
     )
-
-# async def async_migrate_entry(hass, config_entry: ConfigEntry):
-#     _LOGGER.debug("Migrating from version %s", config_entry.version)
-
-#     if config_entry.version == 3:
-
-#         new = {**config_entry.data}
-#         # TODO: modify Config Entry data
-
-#         config_entry.version = 4
-#         hass.config_entries.async_update_entry(config_entry, data=new)
-
-#     _LOGGER.info("Migration to version %s successful", config_entry.version)
-#     return True
 
 
 class BuildTrackFanEntity(FanEntity):
 
-    percentage: int = 0
     selected_preset_mode = "Low"
     preset_modes = [ "Low", "Medium", "High", "Very High"]
 
@@ -63,18 +41,41 @@ class BuildTrackFanEntity(FanEntity):
         self.room_name = fan["room_name"]
         self.room_id = fan["room_id"]
         self.id = fan["ID"]
+        self._attr_unique_id = f"buildtrack_fan_{fan['ID']}"
         self.fan_name = fan["label"]
         self.fan_pin_type = fan["pin_type"]
-        self.unique_id = f"buildtrack_{self.id}"
-        # print(f"[FAN] Register listen to {self.room_name} {self.fan_name}...")
+        self._parent_device = self.hub.get_parent_device_details(self.id)
         self.hub.listen_device_state(self.id)
-        # self.async_schedule_update_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Register state update callback when entity is added."""
+        self.hub.register_state_callback(self.id, self._handle_state_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister state update callback when entity is removed."""
+        self.hub.remove_state_callback(self.id, self._handle_state_update)
+
+    def _handle_state_update(self) -> None:
+        """Handle state update from MQTT/WS (called from background thread)."""
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
     def name(self) -> str:
         """Formulates the device name."""
-    
         return f"{self.room_name} {self.fan_name}"
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return device info for device grouping."""
+        if not self._parent_device:
+            return None
+        mac_id = self._parent_device.get("mac_id", "")
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac_id)},
+            name=self._parent_device.get("label", f"Buildtrack {mac_id}"),
+            manufacturer="Buildtrack",
+            model=self._parent_device.get("model", None),
+        )
 
     @property
     def current_direction(self) -> str:
@@ -95,17 +96,13 @@ class BuildTrackFanEntity(FanEntity):
     @property
     def percentage(self) -> int:
         return self.hub.get_device_state(self.id)["speed"]
-        # return ordered_list_item_to_percentage(self.preset_modes, self.hub.get_device_state(self.id)["speed"])
 
     @property
     def speed_count(self) -> int:
-        # return 4
         return len(self.preset_modes)
 
-    @property
-    def should_poll(self) -> bool:
-        return True
-    
+    _attr_should_poll = False
+
 
     @property
     def preset_mode(self) -> str:
@@ -120,18 +117,16 @@ class BuildTrackFanEntity(FanEntity):
         return self.selected_preset_mode
 
     async def async_increase_speed(self, percentage_step) -> None:
-        current_speed = await self.percentage
+        current_speed = self.percentage
         if current_speed + percentage_step > 100:
             return
-        else:
-            self.set_percentage(current_speed + percentage_step)
+        await self.async_set_percentage(current_speed + percentage_step)
 
     async def async_decrease_speed(self, percentage_step) -> None:
-        current_speed = await self.percentage
-        if current_speed + percentage_step < 0:
+        current_speed = self.percentage
+        if current_speed - percentage_step < 0:
             return
-        else:
-            self.set_percentage(current_speed - percentage_step)
+        await self.async_set_percentage(current_speed - percentage_step)
 
     async def async_set_percentage(self, percentage: int) -> None:
         await self.hub.switch_on(self.id, percentage)
@@ -189,11 +184,3 @@ class BuildTrackFanEntity(FanEntity):
         elif index == 3:
             await self.async_set_percentage(100)
 
-    async def async_update(self) -> None:
-        pass
-        # self.percentage = self.hub.get_device_state(self.id)["speed"]
-    
-    
-
-    # async def async_set_percentage(self, percentage: int) -> None:
-    #     await self.hub.switch_on(self.id, percentage)

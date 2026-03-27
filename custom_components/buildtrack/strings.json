@@ -4,9 +4,7 @@
       "user": {
         "data": {
           "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]",
-          "mqtt_username": "[%key:common::config_flow::data::mqtt_username%]",
-          "mqtt_password": "[%key:common::config_flow::data::mqtt_password%]"
+          "password": "[%key:common::config_flow::data::password%]"
         }
       }
     },

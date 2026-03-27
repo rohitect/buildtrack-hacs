@@ -7,14 +7,15 @@ import random
 import ssl
 import string
 import threading
-from typing import TYPE_CHECKING, Any
+import time
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import aiohttp
 import asyncio
 import paho.mqtt.client as mqtt
 import websocket
 
-from .common import Singleton
 from .const import (
     MQTT_BROKER_HOST,
     MQTT_BROKER_PORT,
@@ -23,14 +24,8 @@ from .const import (
     MQTT_PROTOCOL,
     MQTT_KEEPALIVE,
     MQTT_TIMEOUT,
-    MQTT_MIN_RECONNECT_DELAY,
-    MQTT_MAX_RECONNECT_DELAY,
     WS_URL,
     WS_ORIGIN,
-    WS_PING_INTERVAL,
-    WS_PING_TIMEOUT,
-    WS_PING_PAYLOAD,
-    HTTP_TIMEOUT,
 )
 
 if TYPE_CHECKING:
@@ -39,7 +34,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-class BuildTrackDeviceManager(metaclass=Singleton):
+class BuildTrackDeviceManager:
     """Manages the state of all buildtrack devices via MQTT and WebSocket."""
 
     def __init__(
@@ -72,6 +67,11 @@ class BuildTrackDeviceManager(metaclass=Singleton):
 
         # Task tracking
         self._http_tasks: set[asyncio.Task] = set()
+        self._shutting_down = False
+        self._ws_reconnect_delay = 1  # exponential backoff for WebSocket reconnects
+
+        # State change callbacks: keyed by "{mac_id}_{pin_number}"
+        self._state_callbacks: dict[str, list[Callable[[], None]]] = {}
 
         # Initialize connections
         self.connect_to_buildtrack_tcp_server()
@@ -116,10 +116,35 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         }
         return json.dumps(command)
 
+    def register_callback(
+        self, mac_id: str, pin_number: str, callback: Callable[[], None]
+    ) -> None:
+        """Register a callback for state changes on a specific device pin."""
+        key = f"{mac_id}_{pin_number}"
+        self._state_callbacks.setdefault(key, []).append(callback)
+
+    def remove_callback(
+        self, mac_id: str, pin_number: str, callback: Callable[[], None]
+    ) -> None:
+        """Remove a previously registered callback."""
+        key = f"{mac_id}_{pin_number}"
+        if key in self._state_callbacks:
+            self._state_callbacks[key] = [
+                cb for cb in self._state_callbacks[key] if cb is not callback
+            ]
+
+    def _notify_callbacks(self, mac_id: str, pin_number: str) -> None:
+        """Notify all registered callbacks for a device pin."""
+        key = f"{mac_id}_{pin_number}"
+        for callback in self._state_callbacks.get(key, []):
+            try:
+                callback()
+            except Exception as ex:
+                _LOGGER.debug(f"Error in state callback for {key}: {ex}")
+
     def listen_to_tcp_device_status(self, mac_id):
         """Listen to buildtrack device status over websocket."""
         if self.websocket_connection is not None:
-            # if mac_id not in self.mac_id_wise_state:
             if not self.is_websocket_connected:
                 self.pending_listening_devices.add(mac_id)
                 return
@@ -155,10 +180,6 @@ class BuildTrackDeviceManager(metaclass=Singleton):
     def manual_device_state_update(self, mac_id, pin_number, state: bool):
         """Update the device status until the websocket response arrives manually."""
         if mac_id in self.mac_id_wise_state:
-            # _LOGGER.debug(self.mac_id_wise_state[mac_id])
-            # _LOGGER.debug(str(pin_number))
-            # _LOGGER.debug(state)
-
             self.mac_id_wise_state[mac_id][f"{pin_number}"]["state"] = 1 if state else 0
 
     def call_local_http_api(self, mac_id, pin_number, state, speed=None):
@@ -236,7 +257,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             self.listen_to_tcp_device_status(device_mac)
 
     def mqtt_subscribe_to_device_state(self, mac_id):
-        # _LOGGER.debug("is_mqtt_connected: " + str(self.is_mqtt_connected))
+        """Subscribe to MQTT status topic and fetch initial state for a device."""
         if self.is_mqtt_connected:
             _LOGGER.debug("MQTT: Subscribing to status for " + str(mac_id))
             self.mqtt_client.subscribe(mac_id + "/status")
@@ -304,14 +325,10 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             # The callback for when a PUBLISH message is received from the server.
             def on_message(client, userdata, msg):
                 _LOGGER.debug("MQTT: Message received on " + msg.topic + " : " + str(msg.payload))
-                topic = str(msg.topic)
                 message = str(msg.payload.decode("utf-8"))
                 decoded_message = json.loads(message)
                 _LOGGER.debug(decoded_message)
                 self.update_switch_state(decoded_message)
-
-            def on_log(client, userdata, level, buf):
-                _LOGGER.debug("log: ", buf)
 
             def on_disconnect(client, userdata, rc):
                 _LOGGER.debug(f"Buildtrack MQTT Server Disconnected with code: {rc}")
@@ -322,11 +339,7 @@ class BuildTrackDeviceManager(metaclass=Singleton):
             # Set callbacks
             self.mqtt_client.on_connect = on_connect
             self.mqtt_client.on_message = on_message
-            # self.mqtt_client.on_log = on_log
             self.mqtt_client.on_disconnect = on_disconnect
-
-            # DO NOT set username and password - authenticate via client ID only
-            # self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
 
             # Enable automatic reconnection
             self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=120)
@@ -371,20 +384,19 @@ class BuildTrackDeviceManager(metaclass=Singleton):
     def connect_to_buildtrack_tcp_server(self):
         """Connect to buildtrack webserver via websocket."""
         self.websocket_connection = websocket.WebSocketApp(
-            "wss://ms.buildtrack.in/service/socket/?authenticate=4nedc2xrPQcphbqH45Eo&EIO=3&transport=websocket",
+            WS_URL,
             on_open=self.on_open,
             on_message=self.on_message,
             on_error=self.on_error,
             on_close=self.on_close,
-            header={"Origin": "http://ezcentral.buildtrack.in"},
+            header={"Origin": WS_ORIGIN},
         )
-        wst = threading.Thread(
+        self.wst = threading.Thread(
             target=self.websocket_connection.run_forever,
             kwargs={"ping_timeout": 20, "ping_payload": "2", "ping_interval": 25},
         )
-        wst.daemon = True
-        wst.start()
-        # self.websocket_connection.run_forever(ping_interval=25, ping_timeout=20, ping_payload='2')
+        self.wst.daemon = True
+        self.wst.start()
 
     def is_device_on(self, mac_id, pin_number) -> bool:
         """Check if the device stats is on or off."""
@@ -419,25 +431,25 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         return self.mac_id_wise_state[mac_id][f"{pin_number}"]
 
     def update_switch_state(self, decoded_message):
-        """Update the switch state on the buildtrack server."""
+        """Update the switch state from MQTT/WS status message."""
         _LOGGER.debug(decoded_message)
         if decoded_message["command"] == "status":
-            if decoded_message["uid"] not in self.mac_id_wise_state:
-                # if decoded_message["uid"] == "40F5200DCF2D":
-                # _LOGGER.debug(decoded_message["uid"] + " not in mac_id_wise_state")
-                self.mac_id_wise_state[decoded_message["uid"]] = {}
-            # if decoded_message["uid"] == "40F5200DCF2D":
+            mac_id = decoded_message["uid"]
+            if mac_id not in self.mac_id_wise_state:
+                self.mac_id_wise_state[mac_id] = {}
             _LOGGER.debug(decoded_message)
             for index, item in enumerate(decoded_message["pin"]):
+                pin_number = f"{index + 1}"
                 if isinstance(item, dict):
-                    self.mac_id_wise_state[decoded_message["uid"]][f"{index + 1}"] = {
+                    self.mac_id_wise_state[mac_id][pin_number] = {
                         "state": int(item["state"]),
                         "speed": int(item["speed"]),
                     }
                 else:
-                    self.mac_id_wise_state[decoded_message["uid"]][f"{index + 1}"] = {
+                    self.mac_id_wise_state[mac_id][pin_number] = {
                         "state": int(item)
                     }
+                self._notify_callbacks(mac_id, pin_number)
 
     def _send_command(self, mac_id: str, command_json: str) -> None:
         """Send command via MQTT or TCP.
@@ -508,10 +520,52 @@ class BuildTrackDeviceManager(metaclass=Singleton):
         """Handle websocket closed."""
         _LOGGER.debug(f"WebSocket closed with code {close_status_code}: {close_msg}")
         self.is_websocket_connected = False
-        self.connect_to_buildtrack_tcp_server()
+        if not self._shutting_down:
+            _LOGGER.debug(f"WebSocket reconnecting in {self._ws_reconnect_delay}s...")
+            time.sleep(self._ws_reconnect_delay)
+            self._ws_reconnect_delay = min(self._ws_reconnect_delay * 2, 120)
+            self.connect_to_buildtrack_tcp_server()
 
     def on_open(self, websocket_con):
         """Handle websocket connection open."""
         _LOGGER.debug("Connected to buildtrack server....")
+        self._ws_reconnect_delay = 1  # reset backoff on successful connect
         websocket_con.send(f'42["login","{self.user_id}"]')
         self.register_all_tcp_devices_listeners()
+
+    def disconnect(self) -> None:
+        """Disconnect all connections and clean up resources."""
+        _LOGGER.debug("Disconnecting BuildTrackDeviceManager")
+        self._shutting_down = True
+
+        # Cancel all pending HTTP tasks
+        for task in self._http_tasks:
+            task.cancel()
+        self._http_tasks.clear()
+
+        # Disconnect MQTT (causes loop_forever to return, ending the thread)
+        if self.mqtt_client is not None:
+            try:
+                self.mqtt_client.disconnect()
+            except Exception as ex:
+                _LOGGER.debug(f"Error disconnecting MQTT: {ex}")
+            self.mqtt_client = None
+        self.is_mqtt_connected = False
+
+        # Close WebSocket (_shutting_down flag prevents auto-reconnect in on_close)
+        if self.websocket_connection is not None:
+            try:
+                self.websocket_connection.close()
+            except Exception as ex:
+                _LOGGER.debug(f"Error closing WebSocket: {ex}")
+            self.websocket_connection = None
+        self.is_websocket_connected = False
+
+        # Wait for threads to finish
+        if self.mqtt_thread is not None and self.mqtt_thread.is_alive():
+            self.mqtt_thread.join(timeout=5)
+            self.mqtt_thread = None
+
+        if self.wst is not None and self.wst.is_alive():
+            self.wst.join(timeout=5)
+            self.wst = None

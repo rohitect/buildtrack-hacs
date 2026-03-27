@@ -4,11 +4,11 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .buildtrack_api import BuildTrackAPI
 from .const import DOMAIN
 
-# For your initial PR, limit it to 1 platform.
 PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.FAN, Platform.COVER]
 
 
@@ -16,11 +16,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Buildtrack from a config entry."""
     hub = BuildTrackAPI()
     hub.set_credentials(entry.data["username"], entry.data["password"])
-    hub.set_mqtt_creds(entry.data["mqtt_username"], entry.data["mqtt_password"])
+    hub.set_mqtt_creds(entry.data.get("mqtt_username", ""), entry.data.get("mqtt_password", ""))
 
-    # Authenticate user (now async)
     if not await hub.authenticate_user():
-        return False
+        raise ConfigEntryNotReady("Failed to authenticate with Buildtrack")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
@@ -32,6 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
+        hub: BuildTrackAPI = hass.data[DOMAIN].pop(entry.entry_id)
+        await hass.async_add_executor_job(hub.shutdown)
 
     return unload_ok
