@@ -311,26 +311,31 @@ class BuildTrackAPI:
     async def switch_on(self, device_id: str, speed: int | None = None) -> None:
         """Turn the device on."""
         mac_id, pin_number = self._get_device_info(device_id)
+        _LOGGER.info("API switch_on: device=%s -> mac=%s pin=%s speed=%s", device_id, mac_id, pin_number, speed)
         self.device_state_manager.switch_on(mac_id, pin_number, speed)
 
     async def switch_off(self, device_id: str, speed: int | None = None) -> None:
         """Turn the device off."""
         mac_id, pin_number = self._get_device_info(device_id)
+        _LOGGER.info("API switch_off: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
         self.device_state_manager.switch_off(mac_id, pin_number, speed)
 
     async def open_cover(self, device_id: str) -> None:
         """Open the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
+        _LOGGER.info("API open_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="open")
 
     async def close_cover(self, device_id: str) -> None:
         """Close the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
+        _LOGGER.info("API close_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="close")
 
     async def stop_cover(self, device_id: str) -> None:
         """Stop the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
+        _LOGGER.info("API stop_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
         self.device_state_manager.set_cover_state(mac_id, pin_number, state="stop")
 
     def is_device_on(self, device_id: str) -> bool:

@@ -459,16 +459,16 @@ class BuildTrackDeviceManager:
             command_json: The JSON command string to send
         """
         if mac_id in self.device_mqtt_mac_ids:
-            _LOGGER.debug("Sending command via MQTT")
+            _LOGGER.info("Sending command via MQTT to %s: %s", mac_id, command_json)
             self.mqtt_client.publish(f"{mac_id}/execute", payload=command_json)
         else:
-            _LOGGER.debug("Sending command via TCP")
+            _LOGGER.info("Sending command via WebSocket to %s: %s", mac_id, command_json)
             message = json.dumps(["event_push", command_json])
             self.websocket_connection.send("42" + message)
 
     def switch_on(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch on the device."""
-        _LOGGER.debug(f"Switching on {mac_id} with speed={speed}")
+        _LOGGER.info("switch_on: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
 
         # Build command
         command_json = self._build_command(mac_id, pin_number, "on", speed)
@@ -484,7 +484,7 @@ class BuildTrackDeviceManager:
 
     def switch_off(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch off the device."""
-        _LOGGER.debug(f"Switching off {mac_id}")
+        _LOGGER.info("switch_off: mac=%s pin=%s speed=%s", mac_id, pin_number, speed)
 
         # Build command
         command_json = self._build_command(mac_id, pin_number, "off", speed)
@@ -500,7 +500,7 @@ class BuildTrackDeviceManager:
 
     def set_cover_state(self, mac_id: str, pin_number: str, state: str = "open") -> None:
         """Set cover state (open/close/stop)."""
-        # Build command
+        _LOGGER.info("set_cover_state: mac=%s pin=%s state=%s", mac_id, pin_number, state)
         command_json = self._build_command(mac_id, pin_number, state, speed=0)
 
         # Call local HTTP API
