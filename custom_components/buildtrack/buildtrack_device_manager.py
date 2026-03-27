@@ -188,7 +188,7 @@ class BuildTrackDeviceManager:
     def call_local_http_api(self, mac_id, pin_number, state, speed=None):
         """Call the local HTTP API on the device's node_local_ip."""
         if not self.api_reference:
-            _LOGGER.debug("API reference not available, skipping local HTTP call")
+            _LOGGER.info("Local HTTP: skipped (no API reference) for mac=%s", mac_id)
             return
 
         # Find the device_id from mac_id
@@ -199,13 +199,13 @@ class BuildTrackDeviceManager:
                 break
 
         if not device_id:
-            _LOGGER.debug(f"Device ID not found for mac_id: {mac_id}")
+            _LOGGER.info("Local HTTP: skipped (no device found for mac=%s)", mac_id)
             return
 
         # Get node_local_ip
         node_local_ip = self.api_reference.get_node_local_ip_for_device(device_id)
         if not node_local_ip:
-            _LOGGER.debug(f"node_local_ip not available for device {device_id}")
+            _LOGGER.info("Local HTTP: skipped (no local IP for device=%s mac=%s)", device_id, mac_id)
             return
 
         # Prepare the payload
@@ -226,6 +226,7 @@ class BuildTrackDeviceManager:
 
         # Schedule the async HTTP call in a separate task
         url = f"http://{node_local_ip}/execute"
+        _LOGGER.info("Local HTTP: sending to %s (mac=%s pin=%s state=%s)", url, mac_id, pin_number, state)
         task = asyncio.create_task(self._async_http_call(url, payload, mac_id))
         self._http_tasks.add(task)
         task.add_done_callback(self._http_tasks.discard)
@@ -233,7 +234,6 @@ class BuildTrackDeviceManager:
     async def _async_http_call(self, url, payload, mac_id):
         """Make async HTTP POST request to device."""
         try:
-            _LOGGER.debug(f"Calling local HTTP API: {url}")
             timeout = aiohttp.ClientTimeout(total=2)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
@@ -241,11 +241,11 @@ class BuildTrackDeviceManager:
                     headers={'Content-Type': 'text/plain; charset=utf-8'},
                     json=payload
                 ) as response:
-                    _LOGGER.debug(f"Local HTTP API response: {response.status}")
+                    _LOGGER.info("Local HTTP: response %s from %s", response.status, url)
         except asyncio.TimeoutError:
-            _LOGGER.debug(f"Timeout calling local HTTP API for {mac_id}")
+            _LOGGER.warning("Local HTTP: timeout calling %s (mac=%s)", url, mac_id)
         except Exception as ex:
-            _LOGGER.debug(f"Error calling local HTTP API for {mac_id}: {ex}")
+            _LOGGER.warning("Local HTTP: error calling %s (mac=%s): %s", url, mac_id, ex)
 
     def register_all_tcp_devices_listeners(self):
         """Register the listeners for all the devices upon new connection."""
