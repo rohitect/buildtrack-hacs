@@ -1,5 +1,5 @@
 {
-  "version":"0.0.24",
+  "version":"0.0.27",
   "domain": "buildtrack",
   "name": "Buildtrack",
   "config_flow": true,
