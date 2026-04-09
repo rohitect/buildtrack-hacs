@@ -132,7 +132,8 @@ class BuildTrackAPI:
                         self.mqtt_username,
                         self.mqtt_password,
                         self.mqtt_client_id,
-                        api_reference=self
+                        api_reference=self,
+                        token=self.token,
                     )
                     return True
         except Exception as ex:

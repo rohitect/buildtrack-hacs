@@ -33,6 +33,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     _attr_is_closed: bool | None = None
     _attr_should_poll = False
+    _attr_has_entity_name = True
     _attr_supported_features = (
         CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
     )
@@ -68,8 +69,8 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     @property
     def name(self) -> str:
-        """Formulates the device name."""
-        return f"{self.room_name} {self.curtain_name}"
+        """Return the entity name."""
+        return self.curtain_name
 
     @property
     def device_info(self) -> DeviceInfo | None:

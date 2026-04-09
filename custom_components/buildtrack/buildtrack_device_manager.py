@@ -43,7 +43,8 @@ class BuildTrackDeviceManager:
         mqtt_username: str,
         mqtt_password: str,
         mqtt_client_id: str | None = None,
-        api_reference: BuildTrackAPI | None = None
+        api_reference: BuildTrackAPI | None = None,
+        token: str | None = None,
     ) -> None:
         """Initialize the Build Track State Manager."""
         self.user_id = user_id
@@ -51,6 +52,7 @@ class BuildTrackDeviceManager:
         self.mqtt_password = mqtt_password
         self.mqtt_client_id = mqtt_client_id or self._generate_random_client_name()
         self.api_reference = api_reference
+        self.token = token
 
         # State management
         self.mac_id_wise_state: dict[str, dict[str, dict[str, int]]] = {}
@@ -260,21 +262,62 @@ class BuildTrackDeviceManager:
             self.listen_to_tcp_device_status(device_mac)
 
     def mqtt_subscribe_to_device_state(self, mac_id):
-        """Subscribe to MQTT status topic and fetch initial state for a device."""
-        if self.is_mqtt_connected:
-            _LOGGER.debug("MQTT: Subscribing to status for " + str(mac_id))
-            self.mqtt_client.subscribe(mac_id + "/status")
+        """Subscribe to device status topic and request initial state via MQTT."""
+        # Initialize state dict so is_device_on() doesn't default to False
+        self.mac_id_wise_state.setdefault(mac_id, {})
 
-            _LOGGER.debug("MQTT: Fetching Initial Device Status " + str(mac_id))
-            # Publish the below message to fetch the device status
-            self.mqtt_client.publish(f"{mac_id}/execute", payload=json.dumps({
-                "macID": mac_id,
-                "event": "execute",
-                "command": "deviceStatus",
-                "params": 0,
-                "passcode": mac_id,
-                "to": mac_id
-            }))
+        if not self.is_mqtt_connected or self.mqtt_client is None:
+            return
+
+        _LOGGER.debug("MQTT: Subscribing to %s/status", mac_id)
+        self.mqtt_client.subscribe(f"{mac_id}/status")
+
+        _LOGGER.debug("MQTT: Requesting deviceStatus for %s", mac_id)
+        self.mqtt_client.publish(f"{mac_id}/execute", payload=json.dumps({
+            "macID": mac_id,
+            "event": "execute",
+            "command": "deviceStatus",
+            "params": 0,
+            "passcode": mac_id,
+            "to": mac_id,
+        }))
+
+    def _handle_pin_status(self, mac_id: str, payload: dict) -> None:
+        """Handle a pinStatus MQTT message for a specific device."""
+        _LOGGER.debug("MQTT pinStatus for %s: %s", mac_id, payload)
+
+        # If the payload already looks like a full status message, reuse existing parser
+        if isinstance(payload, dict) and payload.get("command") == "status":
+            self.update_switch_state(payload)
+            return
+
+        # Otherwise try to extract pin array directly
+        pins = None
+        if isinstance(payload, dict):
+            pins = payload.get("pin") or payload.get("pins")
+        elif isinstance(payload, list):
+            pins = payload
+
+        if pins is None:
+            _LOGGER.debug("MQTT pinStatus: no pin data found for %s, payload: %s", mac_id, payload)
+            return
+
+        # Synthesise a status message in the same format update_switch_state expects
+        self.update_switch_state({"command": "status", "uid": mac_id, "pin": pins})
+
+    def _handle_execution_status(self, payload) -> None:
+        """Handle an executionStatus MQTT message (command result or bulk device state)."""
+        _LOGGER.debug("MQTT executionStatus: %s", payload)
+
+        if isinstance(payload, list):
+            # Bulk response: list of device status objects
+            for item in payload:
+                if isinstance(item, dict) and item.get("command") == "status":
+                    self.update_switch_state(item)
+        elif isinstance(payload, dict):
+            if payload.get("command") == "status":
+                self.update_switch_state(payload)
+            # If it's a command ack (e.g. {"command": "execute", ...}), nothing to update
 
     def connect_to_buildtrack_mqtt_server(self) -> None:
         """Connect to Buildtrack MQTT Server via WebSocket."""
@@ -294,44 +337,80 @@ class BuildTrackDeviceManager:
 
             # The callback for when the client receives a CONNACK response from the server.
             def on_connect(client, userdata, flags, rc):
-                if rc == 0:
-                    _LOGGER.info("Buildtrack MQTT Server connected successfully via WebSocket")
-                else:
-                    _LOGGER.error(f"Buildtrack MQTT Server connection failed with result code {rc}")
+                if rc != 0:
+                    _LOGGER.error("Buildtrack MQTT Server connection failed with result code %d", rc)
                     return
 
-                # Subscribing in on_connect() means that if we lose the connection and
-                # reconnect then subscriptions will be renewed.
+                _LOGGER.info("Buildtrack MQTT Server connected successfully via WebSocket")
+                self.is_mqtt_connected = True
 
-                # this is mainly to support websocket via mqtt
-                _LOGGER.debug("Sending WillMsg ....")
+                # Subscribing in on_connect() means subscriptions are renewed on reconnect.
                 client.publish("WillMsg", payload="Connection Closed abnormally..!")
 
-                _LOGGER.debug("MQTT (On Connect): Subscribing to " + str(len(self.device_mqtt_mac_ids))+" devices statuses...")
+                if not self.token:
+                    _LOGGER.error("MQTT: No token available — cannot subscribe to account-level topics")
+                    return
 
-                self.is_mqtt_connected = True
+                # Subscribe to account-level topics for real-time push updates
+                topics = [
+                    (f"executionStatus/{self.token}", 0),
+                    (f"{self.token}/#", 0),
+                    (f"pinStatus/{self.token}/#", 0),
+                    (f"nodeStatus/{self.token}/#", 0),
+                    (f"connectivityStatus/{self.token}", 0),
+                ]
+                _LOGGER.debug("MQTT: Subscribing to %d account-level topics", len(topics))
+                client.subscribe(topics)
+
+                # Per-device: subscribe to {mac_id}/status and request current state
                 for mac_id in self.device_mqtt_mac_ids:
-                    _LOGGER.debug("MQTT (On Connect): Subscribing to status for " + str(mac_id))
-                    client.subscribe(mac_id + "/status")
-
-                    _LOGGER.debug("MQTT: Fetching Initial Device Status " + str(mac_id))
-                    # Publish the below message to fetch the device status
+                    _LOGGER.debug("MQTT: Subscribing to %s/status and requesting deviceStatus", mac_id)
+                    client.subscribe(f"{mac_id}/status")
                     client.publish(f"{mac_id}/execute", payload=json.dumps({
                         "macID": mac_id,
                         "event": "execute",
                         "command": "deviceStatus",
                         "params": 0,
                         "passcode": mac_id,
-                        "to": mac_id
+                        "to": mac_id,
                     }))
 
             # The callback for when a PUBLISH message is received from the server.
             def on_message(client, userdata, msg):
-                _LOGGER.debug("MQTT: Message received on " + msg.topic + " : " + str(msg.payload))
-                message = str(msg.payload.decode("utf-8"))
-                decoded_message = json.loads(message)
-                _LOGGER.debug(decoded_message)
-                self.update_switch_state(decoded_message)
+                topic: str = msg.topic
+                raw = msg.payload.decode("utf-8")
+                _LOGGER.warning("MQTT RAW: topic=%s payload=%s", topic, raw)
+
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    _LOGGER.debug("MQTT: non-JSON payload on %s, ignoring", topic)
+                    return
+
+                token_prefix = self.token or ""
+
+                if topic.startswith(f"pinStatus/{token_prefix}/"):
+                    # Topic: pinStatus/{token}/{mac_id}
+                    mac_id = topic.split("/", 2)[2]
+                    self._handle_pin_status(mac_id, payload)
+
+                elif topic.startswith(f"nodeStatus/{token_prefix}/"):
+                    # Topic: nodeStatus/{token}/{mac_id} — connectivity / online status
+                    mac_id = topic.split("/", 2)[2]
+                    _LOGGER.debug("MQTT: nodeStatus for %s: %s", mac_id, payload)
+
+                elif topic == f"executionStatus/{token_prefix}":
+                    # Execution result from a command or getExecutionStatus response
+                    self._handle_execution_status(payload)
+
+                elif topic == f"connectivityStatus/{token_prefix}":
+                    _LOGGER.debug("MQTT: connectivityStatus: %s", payload)
+
+                else:
+                    # Covers {mac_id}/status and any other topics
+                    _LOGGER.warning("MQTT OTHER: topic=%s payload=%s", topic, payload)
+                    if isinstance(payload, dict) and payload.get("command") == "status":
+                        self.update_switch_state(payload)
 
             def on_disconnect(client, userdata, rc):
                 _LOGGER.warning("Buildtrack MQTT Server Disconnected with code: %s", rc)
@@ -453,30 +532,32 @@ class BuildTrackDeviceManager:
                 self._notify_callbacks(mac_id, pin_number)
 
     def _send_command(self, mac_id: str, command_json: str) -> None:
-        """Send command via MQTT (with WebSocket fallback) or WebSocket.
+        """Send command via MQTT and WebSocket simultaneously.
 
         Args:
             mac_id: The MAC ID of the device
             command_json: The JSON command string to send
         """
-        if mac_id in self.device_mqtt_mac_ids and self.is_mqtt_connected:
+        # 1. MQTT
+        if self.is_mqtt_connected and self.mqtt_client is not None:
             try:
                 _LOGGER.info("Sending command via MQTT to %s: %s", mac_id, command_json)
                 self.mqtt_client.publish(f"{mac_id}/execute", payload=command_json)
-                return
             except Exception as ex:
-                _LOGGER.warning("MQTT publish failed for %s, falling back to WebSocket: %s", mac_id, ex)
+                _LOGGER.error("MQTT publish failed for %s: %s", mac_id, ex)
+        else:
+            _LOGGER.warning("MQTT not connected — skipping MQTT command for %s", mac_id)
 
-        # Fallback to WebSocket (or primary for non-MQTT devices)
+        # 2. WebSocket
         if self.websocket_connection is not None and self.is_websocket_connected:
             try:
                 _LOGGER.info("Sending command via WebSocket to %s: %s", mac_id, command_json)
                 message = json.dumps(["event_push", command_json])
                 self.websocket_connection.send("42" + message)
             except Exception as ex:
-                _LOGGER.error("WebSocket send also failed for %s: %s", mac_id, ex)
+                _LOGGER.error("WebSocket send failed for %s: %s", mac_id, ex)
         else:
-            _LOGGER.error("No connection available to send command to %s", mac_id)
+            _LOGGER.warning("WebSocket not connected — skipping WebSocket command for %s", mac_id)
 
     def switch_on(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch on the device."""
