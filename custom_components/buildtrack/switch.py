@@ -32,7 +32,6 @@ class BuildtrackSwitch(SwitchEntity):
     """Representation of Buildtrack switch."""
 
     _attr_should_poll = False
-    _attr_has_entity_name = True
     hub: BuildTrackAPI
 
     def __init__(self, hass, hub, switch) -> None:
@@ -67,7 +66,7 @@ class BuildtrackSwitch(SwitchEntity):
     @property
     def name(self) -> str:
         """Return the entity name."""
-        return self.switch_name
+        return f"{self.room_name} {self.switch_name}"
 
     @property
     def device_info(self) -> DeviceInfo | None:

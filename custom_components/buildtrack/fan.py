@@ -30,7 +30,6 @@ async def async_setup_entry(
 
 class BuildTrackFanEntity(FanEntity):
 
-    _attr_has_entity_name = True
     selected_preset_mode = "Low"
     preset_modes = [ "Low", "Medium", "High", "Very High"]
 
@@ -66,7 +65,7 @@ class BuildTrackFanEntity(FanEntity):
     @property
     def name(self) -> str:
         """Return the entity name."""
-        return self.fan_name
+        return f"{self.room_name} {self.fan_name}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
