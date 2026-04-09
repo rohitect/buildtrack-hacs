@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.components.cover import CoverDeviceClass, CoverEntity, CoverEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .buildtrack_api import BuildTrackAPI
@@ -48,7 +47,6 @@ class BuildTrackCurtainEntity(CoverEntity):
         self._attr_unique_id = f"buildtrack_cover_{curtain['ID']}"
         self.curtain_name = curtain["label"]
         self.curtain_pin_type = curtain["pin_type"]
-        self._parent_device = self.hub.get_parent_device_details(self.id)
         self.hub.listen_device_state(self.id)
 
     async def async_added_to_hass(self) -> None:
@@ -71,18 +69,6 @@ class BuildTrackCurtainEntity(CoverEntity):
         """Return the entity name."""
         return f"{self.room_name} {self.curtain_name}"
 
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return device info for device grouping."""
-        if not self._parent_device:
-            return None
-        mac_id = self._parent_device.get("mac_id", "")
-        return DeviceInfo(
-            identifiers={(DOMAIN, mac_id)},
-            name=self._parent_device.get("label", f"Buildtrack {mac_id}"),
-            manufacturer="Buildtrack",
-            model=self._parent_device.get("model", None),
-        )
 
     @property
     def device_class(self) -> CoverDeviceClass:
