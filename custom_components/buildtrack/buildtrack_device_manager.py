@@ -185,7 +185,10 @@ class BuildTrackDeviceManager:
     def manual_device_state_update(self, mac_id, pin_number, state: bool):
         """Update the device status until the websocket response arrives manually."""
         if mac_id in self.mac_id_wise_state:
-            self.mac_id_wise_state[mac_id][f"{pin_number}"]["state"] = 1 if state else 0
+            pin_key = f"{pin_number}"
+            if pin_key not in self.mac_id_wise_state[mac_id]:
+                self.mac_id_wise_state[mac_id][pin_key] = {"state": 0, "speed": 0}
+            self.mac_id_wise_state[mac_id][pin_key]["state"] = 1 if state else 0
 
     def call_local_http_api(self, mac_id, pin_number, state, speed=None):
         """Call the local HTTP API on the device's node_local_ip."""

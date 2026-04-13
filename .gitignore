@@ -127,3 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+custom_components/.DS_Store
+custom_components/buildtrack/.DS_Store

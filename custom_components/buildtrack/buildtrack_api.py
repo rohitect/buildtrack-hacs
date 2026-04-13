@@ -253,6 +253,11 @@ class BuildTrackAPI:
                     self.device_raw_details_map = {
                         device["ID"]: device for device in data
                     }
+                    _LOGGER.debug(
+                        "Loaded %d raw device details. IDs: %s",
+                        len(self.device_raw_details_map),
+                        list(self.device_raw_details_map.keys()),
+                    )
         except Exception as ex:
             _LOGGER.error(f"Failed to load device raw details: {ex}")
 
@@ -267,7 +272,21 @@ class BuildTrackAPI:
         """
         parent_id = self.devices_by_room[device_id]["parentrecordID"]
         mac_id = self.device_parent_ids_map[parent_id]["mac_id"]
-        pin_number = self.device_raw_details_map[device_id]["pin_number"]
+
+        if device_id in self.device_raw_details_map:
+            pin_number = self.device_raw_details_map[device_id]["pin_number"]
+        else:
+            # Fallback: try pin_number from rooms data
+            pin_number = str(self.devices_by_room[device_id].get("pin_number", "1"))
+            _LOGGER.warning(
+                "Device %s not found in raw_details_map (may be wrong type=11 fetch). "
+                "Falling back to pin_number=%s from rooms data. "
+                "Available raw_detail keys sample: %s",
+                device_id,
+                pin_number,
+                list(self.device_raw_details_map.keys())[:5],
+            )
+
         return mac_id, pin_number
 
     def get_parent_device_details(self, device_id: str) -> dict[str, Any] | None:
@@ -330,19 +349,19 @@ class BuildTrackAPI:
         """Open the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API open_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.set_cover_state(mac_id, pin_number, state="open")
+        self.device_state_manager.switch_on(mac_id, pin_number)
 
     async def close_cover(self, device_id: str) -> None:
         """Close the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API close_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.set_cover_state(mac_id, pin_number, state="close")
+        self.device_state_manager.switch_off(mac_id, pin_number)
 
     async def stop_cover(self, device_id: str) -> None:
         """Stop the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API stop_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.set_cover_state(mac_id, pin_number, state="stop")
+        self.device_state_manager.switch_off(mac_id, pin_number)
 
     def is_device_on(self, device_id: str) -> bool:
         """Check if the device is on or not."""
