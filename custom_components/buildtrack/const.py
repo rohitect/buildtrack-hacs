@@ -24,10 +24,6 @@ MQTT_PROTOCOL = "mqtt"
 MQTT_KEEPALIVE = 10
 MQTT_TIMEOUT = 20
 
-# WebSocket Configuration
-WS_URL = "wss://ms.buildtrack.in/service/socket/?authenticate=4nedc2xrPQcphbqH45Eo&EIO=3&transport=websocket"
-WS_ORIGIN = "http://ezcentral.buildtrack.in"
-
 # Timeouts
 API_REQUEST_TIMEOUT = 10
 

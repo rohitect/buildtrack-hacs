@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -29,8 +30,12 @@ async def async_setup_entry(
 
 class BuildTrackFanEntity(FanEntity):
 
-    selected_preset_mode = "Low"
-    preset_modes = [ "Low", "Medium", "High", "Very High"]
+    _attr_should_poll = False
+    _attr_supported_features = (
+        FanEntityFeature.SET_SPEED
+        | FanEntityFeature.TURN_ON
+        | FanEntityFeature.TURN_OFF
+    )
 
     def __init__(self, hass, hub, fan) -> None:
         """Initialize the Buildtrack fan."""
@@ -56,8 +61,8 @@ class BuildTrackFanEntity(FanEntity):
         self.hub.remove_state_callback(self.id, self._handle_state_update)
 
     def _handle_state_update(self) -> None:
-        """Handle state update from MQTT/WS (called from background thread)."""
-        _LOGGER.debug("Fan '%s' received state update: %s", self.name, self.hub.get_device_state(self.id))
+        """Handle state update from MQTT (called from background thread)."""
+        # _LOGGER.debug("Fan '%s' received state update", self.name)
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
@@ -65,115 +70,38 @@ class BuildTrackFanEntity(FanEntity):
         """Return the entity name."""
         return f"{self.room_name} {self.fan_name}"
 
-
     @property
-    def current_direction(self) -> str:
-        return 'Clockwise'
-
-    @property
-    def is_on(self):
+    def is_on(self) -> bool:
+        """Return true if the fan is on."""
         return self.hub.is_device_on(self.id)
 
     @property
-    def supported_features(self) -> int:
-        return FanEntityFeature.SET_SPEED | FanEntityFeature.PRESET_MODE | FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+    def percentage(self) -> int | None:
+        """Return the current speed as a percentage."""
+        state = self.hub.get_device_state(self.id)
+        if not state.get("state"):
+            return 0
+        return int(state.get("speed", 0))
 
-    @property
-    def oscillating(self) -> bool:
-        return False
-
-    @property
-    def percentage(self) -> int:
-        return self.hub.get_device_state(self.id)["speed"]
-
-    @property
-    def speed_count(self) -> int:
-        return len(self.preset_modes)
-
-    _attr_should_poll = False
-
-
-    @property
-    def preset_mode(self) -> str:
-        if self.percentage > 0 and self.percentage <= 25:
-            self.selected_preset_mode = self.preset_modes[0]
-        elif self.percentage > 25 and self.percentage <= 50:
-            self.selected_preset_mode = self.preset_modes[1]
-        elif self.percentage > 50 and self.percentage <= 75:
-            self.selected_preset_mode = self.preset_modes[2]
-        elif self.percentage > 75 and self.percentage <= 100:
-            self.selected_preset_mode = self.preset_modes[3]
-        return self.selected_preset_mode
-
-    async def async_increase_speed(self, percentage_step) -> None:
-        current_speed = self.percentage
-        if current_speed + percentage_step > 100:
-            return
-        await self.async_set_percentage(current_speed + percentage_step)
-
-    async def async_decrease_speed(self, percentage_step) -> None:
-        current_speed = self.percentage
-        if current_speed - percentage_step < 0:
-            return
-        await self.async_set_percentage(current_speed - percentage_step)
-
-    async def async_set_percentage(self, percentage: int) -> None:
-        _LOGGER.info("Setting fan '%s' speed to %d%% (id=%s)", self.name, percentage, self.id)
-        await self.hub.switch_on(self.id, percentage)
-        self.hass.bus.fire(
-            event_type="buildtrack_fan_state_change",
-            event_data={
-                "integration": "buildtrack",
-                "entity_name": self.name,
-                "state": "percentage",
-            },
-        )
-
-    async def async_turn_on(self,
-                            percentage: int | None = None,
-                            preset_mode: str | None = None, **kwargs) -> None:
+    async def async_turn_on(
+        self,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Turn on the fan."""
-        _LOGGER.info("Turning on fan '%s' (id=%s, percentage=%s, preset=%s)", self.name, self.id, percentage, preset_mode)
-        if percentage is not None:
-            await self.async_set_percentage( percentage)
-        elif preset_mode is not None:
-            await self.async_set_preset_mode(preset_mode)
-        else:
-            await self.hub.switch_on(self.id, speed=percentage)
-            
-        self.hass.bus.fire(
-            event_type="buildtrack_fan_state_change",
-            event_data={
-                "integration": "buildtrack",
-                "entity_name": self.name,
-                "state": "on",
-                "percentage": percentage,
-                "preset_mode": preset_mode
-            },
-        )
+        _LOGGER.info("Turning on fan '%s' (id=%s) pct=%s", self.name, self.id, percentage)
+        await self.hub.switch_on(self.id, speed=percentage)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the fan."""
         _LOGGER.info("Turning off fan '%s' (id=%s)", self.name, self.id)
         await self.hub.switch_off(self.id)
-        self.hass.bus.fire(
-            event_type="buildtrack_fan_state_change",
-            event_data={
-                "integration": "buildtrack",
-                "entity_name": self.name,
-                "state": "off",
-            },
-        )
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
-        _LOGGER.info("Setting fan '%s' preset mode to '%s' (id=%s)", self.name, preset_mode, self.id)
-        index = self.preset_modes.index(preset_mode)
-        if index == 0:
-            await self.async_set_percentage(25)
-        elif index == 1:
-            await self.async_set_percentage(50)
-        elif index == 2:
-            await self.async_set_percentage(75)
-        elif index == 3:
-            await self.async_set_percentage(100)
-
+    async def async_set_percentage(self, percentage: int) -> None:
+        """Set the fan speed percentage."""
+        _LOGGER.info("Setting fan '%s' (id=%s) to %d%%", self.name, self.id, percentage)
+        if percentage == 0:
+            await self.hub.switch_off(self.id)
+        else:
+            await self.hub.switch_on(self.id, speed=percentage)

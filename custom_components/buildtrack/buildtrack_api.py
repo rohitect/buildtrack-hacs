@@ -141,7 +141,7 @@ class BuildTrackAPI:
             return False
 
     def start_connections(self) -> None:
-        """Start MQTT and WebSocket connections. Must be called from executor thread."""
+        """Start MQTT connection. Must be called from executor thread."""
         if self.device_state_manager is not None:
             self.device_state_manager.connect()
 
@@ -349,19 +349,19 @@ class BuildTrackAPI:
         """Open the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API open_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.switch_on(mac_id, pin_number)
+        self.device_state_manager.set_cover_state(mac_id, pin_number, "open")
 
     async def close_cover(self, device_id: str) -> None:
         """Close the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API close_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.switch_off(mac_id, pin_number)
+        self.device_state_manager.set_cover_state(mac_id, pin_number, "close")
 
     async def stop_cover(self, device_id: str) -> None:
         """Stop the cover."""
         mac_id, pin_number = self._get_device_info(device_id)
         _LOGGER.debug("API stop_cover: device=%s -> mac=%s pin=%s", device_id, mac_id, pin_number)
-        self.device_state_manager.switch_off(mac_id, pin_number)
+        self.device_state_manager.set_cover_state(mac_id, pin_number, "stop")
 
     def is_device_on(self, device_id: str) -> bool:
         """Check if the device is on or not."""
@@ -398,13 +398,9 @@ class BuildTrackAPI:
             self.device_state_manager = None
 
     def listen_device_state(self, device_id: str) -> None:
-        """Listen for device state."""
+        """Listen for device state via MQTT."""
         parent_id = self.devices_by_room[device_id]["parentrecordID"]
         mac_id = self.device_parent_ids_map[parent_id]["mac_id"]
 
-        # Check if the device is on MQTT or not
-        if self.is_device_on_mqtt(parent_id):
-            self.device_state_manager.device_mqtt_mac_ids.append(mac_id)
-            self.device_state_manager.mqtt_subscribe_to_device_state(mac_id)
-        else:
-            self.device_state_manager.listen_to_tcp_device_status(mac_id)
+        self.device_state_manager.device_mqtt_mac_ids.append(mac_id)
+        self.device_state_manager.mqtt_subscribe_to_device_state(mac_id)

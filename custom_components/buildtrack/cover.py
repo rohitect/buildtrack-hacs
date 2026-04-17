@@ -61,7 +61,7 @@ class BuildTrackCurtainEntity(CoverEntity):
 
     def _handle_state_update(self) -> None:
         """Handle state update from MQTT/WS (called from background thread)."""
-        _LOGGER.debug("Cover '%s' received state update", self.name)
+        # _LOGGER.debug("Cover '%s' received state update", self.name)
         self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @property
