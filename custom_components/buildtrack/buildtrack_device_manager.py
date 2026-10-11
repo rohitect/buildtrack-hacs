@@ -95,19 +95,26 @@ class BuildTrackDeviceManager:
         Returns:
             JSON string command
         """
-        params = {"pin": pin_number, "state": state}
-        if speed is not None:
-            params["speed"] = str(speed)
-        else:
-            params["speed"] = "0"
+        # Speed is zero-padded to two digits to match the official web client,
+        # which sends e.g. "00" / "25" rather than "0" / "25".
+        raw_speed = speed if speed is not None else 0
+        params = {
+            "pin": pin_number,
+            "state": state,
+            "speed": str(raw_speed).zfill(2),
+        }
 
+        # Field order and the "topic" key mirror the payload the BuildTrack web
+        # client publishes, so the command is byte-for-byte what the device
+        # firmware expects.
         command = {
             "macID": mac_id,
             "event": "execute",
+            "topic": f"{mac_id}/execute",
             "command": "execute",
-            "params": [params],
             "passcode": mac_id,
             "to": mac_id,
+            "params": [params],
         }
         return json.dumps(command)
 
@@ -194,11 +201,11 @@ class BuildTrackDeviceManager:
         if speed is not None:
             payload["params"][0]["speed"] = str(speed)
 
-        _LOGGER.info("Payload : %s", payload)    
+        _LOGGER.debug("Local HTTP payload: %s", payload)
 
         # Schedule the async HTTP call in a separate task
         url = f"http://{node_local_ip}/execute"
-        _LOGGER.info("Local HTTP: sending to %s (mac=%s pin=%s state=%s)", url, mac_id, pin_number, state)
+        _LOGGER.debug("Local HTTP: sending to %s (mac=%s pin=%s state=%s)", url, mac_id, pin_number, state)
         task = asyncio.create_task(self._async_http_call(url, payload, mac_id))
         self._http_tasks.add(task)
         task.add_done_callback(self._http_tasks.discard)
@@ -213,11 +220,14 @@ class BuildTrackDeviceManager:
                     headers={'Content-Type': 'text/plain; charset=utf-8'},
                     json=payload
                 ) as response:
-                    _LOGGER.info("Local HTTP: response %s from %s", response.status, url)
+                    _LOGGER.debug("Local HTTP: response %s from %s", response.status, url)
         except asyncio.TimeoutError:
-            _LOGGER.warning("Local HTTP: timeout calling %s (mac=%s)", url, mac_id)
+            # The local call is a best-effort LAN fast path; the command is also
+            # sent over MQTT, so a timeout (e.g. a cloud-only device) is expected
+            # and not worth a warning.
+            _LOGGER.debug("Local HTTP: timeout calling %s (mac=%s)", url, mac_id)
         except Exception as ex:
-            _LOGGER.warning("Local HTTP: error calling %s (mac=%s): %s", url, mac_id, ex)
+            _LOGGER.debug("Local HTTP: error calling %s (mac=%s): %s", url, mac_id, ex)
 
     def mqtt_subscribe_to_device_state(self, mac_id):
         """Subscribe to device status topic and request initial state via MQTT."""
@@ -292,6 +302,16 @@ class BuildTrackDeviceManager:
                 transport="websockets",  # Use WebSocket transport
                 callback_api_version=mqtt.CallbackAPIVersion.VERSION1
             )
+
+            # Authenticate to the broker when credentials are configured. The
+            # BuildTrack broker currently accepts anonymous WebSocket clients
+            # (identity is carried in the client id), so this is a no-op unless
+            # MQTT credentials are supplied, but it avoids a silent failure if
+            # the broker ever starts requiring authentication.
+            if self.mqtt_username:
+                self.mqtt_client.username_pw_set(
+                    self.mqtt_username, self.mqtt_password or None
+                )
 
             # The callback for when the client receives a CONNACK response from the server.
             def on_connect(client, userdata, flags, rc):
@@ -385,13 +405,18 @@ class BuildTrackDeviceManager:
             # Set Last Will and Testament
             self.mqtt_client.will_set("WillMsg", "Connection Closed abnormally..!", qos=0, retain=False)
 
-            # Configure TLS/SSL for WSS connection
+            # Configure TLS/SSL for the WSS connection. Verify the broker's
+            # certificate against the system CA store and check the hostname.
+            # ms.buildtrack.in serves a valid publicly-trusted certificate, so
+            # this protects against man-in-the-middle attacks. Note: if the
+            # broker's certificate ever lapses, the MQTT connection will fail
+            # until it is renewed — relax this only as a temporary workaround.
             self.mqtt_client.tls_set(
-                cert_reqs=ssl.CERT_NONE,  # Don't verify certificate
-                tls_version=ssl.PROTOCOL_TLS
+                cert_reqs=ssl.CERT_REQUIRED,
+                tls_version=ssl.PROTOCOL_TLS,
             )
-            self.mqtt_client.tls_insecure_set(True)  # Allow insecure connection
-            _LOGGER.debug("Using WSS (insecure - no certificate verification)")
+            self.mqtt_client.tls_insecure_set(False)
+            _LOGGER.debug("Using WSS with certificate verification")
 
             # Set WebSocket path and headers - matching browser exactly
             self.mqtt_client.ws_set_options(

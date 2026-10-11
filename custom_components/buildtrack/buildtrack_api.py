@@ -174,16 +174,18 @@ class BuildTrackAPI:
                 ) as response:
                     data = await response.json()
 
-                    # Remove empty rooms
+                    # Remove empty rooms. Use .get("loads") so a room without a
+                    # "loads" key doesn't raise KeyError — which, being caught by
+                    # the broad handler below, would silently drop ALL devices.
                     filtered_rooms = filter(
-                        lambda x: len(x["loads"]) > 0, data.get("rooms", [])
+                        lambda x: len(x.get("loads") or []) > 0, data.get("rooms", [])
                     )
 
                     # Fetch all active devices
                     all_active_devices = []
                     for room in filtered_rooms:
                         loads = []
-                        for load in room["loads"]:
+                        for load in room.get("loads") or []:
                             load["room_name"] = room["name"]
                             load["room_id"] = room["id"]
                             loads.append(load)
