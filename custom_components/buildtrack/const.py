@@ -3,8 +3,12 @@
 DOMAIN = "buildtrack"
 
 # API Endpoints
-API_BASE_URL = "http://ezcentral.buildtrack.in/btadmin/index.php"
-API_BASE_URL_HTTPS = "https://ezcentral.buildtrack.in/btadmin/index.php"
+# Use HTTPS everywhere: credentials and the session token are passed to these
+# endpoints, so they must not travel over plain HTTP. ezcentral.buildtrack.in
+# serves a valid certificate (the web UI and the account-info endpoint already
+# use HTTPS), so this is safe.
+API_BASE_URL = "https://ezcentral.buildtrack.in/btadmin/index.php"
+API_BASE_URL_HTTPS = API_BASE_URL
 API_LOGIN_URL = f"{API_BASE_URL}/commonrestappservice/login/format/json"
 API_USER_ACCOUNT_INFO_URL = f"{API_BASE_URL_HTTPS}/restappservice/getuseraccountinfo/userid/{{user_id}}/roleID/{{role_id}}/token/{{token}}/format/json"
 API_ROOMS_URL = f"{API_BASE_URL}/restappservice/getRoomPinDetails/userid/{{user_id}}/roleID/{{role_id}}/token/{{token}}/format/json"

@@ -137,13 +137,21 @@ class BuildTrackDeviceManager:
             except Exception as ex:
                 _LOGGER.debug(f"Error in state callback for {key}: {ex}")
 
-    def manual_device_state_update(self, mac_id, pin_number, state: bool):
+    def manual_device_state_update(self, mac_id, pin_number, state: bool, speed=None):
         """Update the device status optimistically until an MQTT response arrives."""
         if mac_id in self.mac_id_wise_state:
             pin_key = f"{pin_number}"
             if pin_key not in self.mac_id_wise_state[mac_id]:
                 self.mac_id_wise_state[mac_id][pin_key] = {"state": 0, "speed": 0}
             self.mac_id_wise_state[mac_id][pin_key]["state"] = 1 if state else 0
+            # Reflect the requested speed immediately (e.g. for fans) so the
+            # entity's reported percentage is correct before the MQTT status
+            # echo arrives, instead of showing a stale value.
+            if speed is not None:
+                try:
+                    self.mac_id_wise_state[mac_id][pin_key]["speed"] = int(speed)
+                except (TypeError, ValueError):
+                    pass
 
     def call_local_http_api(self, mac_id, pin_number, state, speed=None):
         """Call the local HTTP API on the device's node_local_ip."""
@@ -480,7 +488,7 @@ class BuildTrackDeviceManager:
         self._send_command(mac_id, command_json)
 
         # Update local state
-        self.manual_device_state_update(mac_id, pin_number, True)
+        self.manual_device_state_update(mac_id, pin_number, True, speed)
 
     def switch_off(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch off the device."""

@@ -98,11 +98,17 @@ class BuildTrackAPI:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
                     API_LOGIN_URL,
-                    headers={
-                        "content-type": CONTENT_TYPE_FORM,
-                        "referer": REFERER_HEADER
+                    headers={"referer": REFERER_HEADER},
+                    # Pass the body as a dict so aiohttp URL-encodes it. Building
+                    # the form string by hand broke authentication whenever the
+                    # username or password contained reserved characters such as
+                    # & = + % or #. aiohttp sets the correct content-type header.
+                    data={
+                        "useremail": self.username,
+                        "userpassword": self.password,
+                        "rememberme": "true",
+                        "type": "authenticate",
                     },
-                    data=f"useremail={self.username}&userpassword={self.password}&rememberme=true&type=authenticate",
                 ) as response:
                     data = await response.json()
                     _LOGGER.debug("Login Response")
@@ -269,25 +275,37 @@ class BuildTrackAPI:
 
         Returns:
             Tuple of (mac_id, pin_number)
+
+        Raises:
+            KeyError: the device is unknown.
+            ValueError: the pin number cannot be resolved. We deliberately do
+                NOT guess a pin here: on a multi-relay node, sending a command
+                to the wrong pin would switch a completely different load (e.g.
+                a geyser instead of a light), so refusing is the safe choice.
         """
-        parent_id = self.devices_by_room[device_id]["parentrecordID"]
+        device = self.devices_by_room.get(device_id)
+        if device is None:
+            raise KeyError(f"Device {device_id} not found in rooms data")
+
+        parent_id = device["parentrecordID"]
         mac_id = self.device_parent_ids_map[parent_id]["mac_id"]
 
-        if device_id in self.device_raw_details_map:
-            pin_number = self.device_raw_details_map[device_id]["pin_number"]
-        else:
-            # Fallback: try pin_number from rooms data
-            pin_number = str(self.devices_by_room[device_id].get("pin_number", "1"))
-            _LOGGER.warning(
-                "Device %s not found in raw_details_map (may be wrong type=11 fetch). "
-                "Falling back to pin_number=%s from rooms data. "
-                "Available raw_detail keys sample: %s",
-                device_id,
-                pin_number,
-                list(self.device_raw_details_map.keys())[:5],
+        # The rooms/pin data (getRoomPinDetails) is the authoritative source for
+        # the pin number — it is exactly what the BuildTrack web UI uses to build
+        # its commands. Prefer it, and only fall back to the raw-details map
+        # (getCatRecordForAssign type=11) when rooms data is missing a pin.
+        pin_number = device.get("pin_number") or device.get("pin")
+        if not pin_number and device_id in self.device_raw_details_map:
+            pin_number = self.device_raw_details_map[device_id].get("pin_number")
+
+        if not pin_number:
+            raise ValueError(
+                f"Could not resolve pin_number for device {device_id} "
+                f"(mac={mac_id}); refusing to send a command to avoid "
+                f"controlling the wrong relay"
             )
 
-        return mac_id, pin_number
+        return mac_id, str(pin_number)
 
     def get_parent_device_details(self, device_id: str) -> dict[str, Any] | None:
         """Get the parent device details for a given device.
@@ -330,7 +348,11 @@ class BuildTrackAPI:
 
     def get_device_state(self, device_id: str) -> dict[str, Any]:
         """Get the current state of a device."""
-        mac_id, pin_number = self._get_device_info(device_id)
+        try:
+            mac_id, pin_number = self._get_device_info(device_id)
+        except (KeyError, ValueError) as ex:
+            _LOGGER.debug("get_device_state: %s", ex)
+            return {"state": 0, "speed": 0}
         return self.device_state_manager.fetch_device_state(mac_id, pin_number)
 
     async def switch_on(self, device_id: str, speed: int | None = None) -> None:
@@ -367,7 +389,11 @@ class BuildTrackAPI:
         """Check if the device is on or not."""
         if device_id not in self.devices_by_room:
             return False
-        mac_id, pin_number = self._get_device_info(device_id)
+        try:
+            mac_id, pin_number = self._get_device_info(device_id)
+        except (KeyError, ValueError) as ex:
+            _LOGGER.debug("is_device_on: %s", ex)
+            return False
         return self.device_state_manager.is_device_on(mac_id, pin_number)
 
     async def toggle_device(self, device_id: str) -> None:
@@ -381,14 +407,22 @@ class BuildTrackAPI:
         self, device_id: str, callback: Callable[[], None]
     ) -> None:
         """Register a callback for state changes on a device."""
-        mac_id, pin_number = self._get_device_info(device_id)
+        try:
+            mac_id, pin_number = self._get_device_info(device_id)
+        except (KeyError, ValueError) as ex:
+            _LOGGER.warning("Cannot register state callback for %s: %s", device_id, ex)
+            return
         self.device_state_manager.register_callback(mac_id, pin_number, callback)
 
     def remove_state_callback(
         self, device_id: str, callback: Callable[[], None]
     ) -> None:
         """Remove a state change callback for a device."""
-        mac_id, pin_number = self._get_device_info(device_id)
+        try:
+            mac_id, pin_number = self._get_device_info(device_id)
+        except (KeyError, ValueError) as ex:
+            _LOGGER.debug("Cannot remove state callback for %s: %s", device_id, ex)
+            return
         self.device_state_manager.remove_callback(mac_id, pin_number, callback)
 
     def shutdown(self) -> None:

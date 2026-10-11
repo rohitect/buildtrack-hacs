@@ -36,6 +36,17 @@ class BuildTrackFanEntity(FanEntity):
         | FanEntityFeature.TURN_ON
         | FanEntityFeature.TURN_OFF
     )
+    # BuildTrack fans are 4-speed regulators; the cloud expects discrete speed
+    # values of 25/50/75/100 (verified: UI level 1 == speed "25"). Advertising
+    # 4 speeds makes Home Assistant present four steps and map each slider step
+    # to one of those values instead of an arbitrary 1-100 percentage.
+    _attr_speed_count = 4
+
+    @staticmethod
+    def _snap_speed(percentage: int) -> int:
+        """Snap an arbitrary 1-100 percentage to a valid device speed (25/50/75/100)."""
+        level = min(4, max(1, round(percentage / 25)))
+        return level * 25
 
     def __init__(self, hass, hub, fan) -> None:
         """Initialize the Buildtrack fan."""
@@ -90,8 +101,15 @@ class BuildTrackFanEntity(FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the fan."""
-        _LOGGER.info("Turning on fan '%s' (id=%s) pct=%s", self.name, self.id, percentage)
-        await self.hub.switch_on(self.id, speed=percentage)
+        if percentage is None or percentage == 0:
+            # Turning on without a requested speed: resume the last known speed
+            # (as the BuildTrack app does), or fall back to full speed. Sending
+            # speed 0 would turn the relay on but leave the fan not spinning.
+            current = int(self.hub.get_device_state(self.id).get("speed", 0) or 0)
+            percentage = current if current > 0 else 100
+        speed = self._snap_speed(percentage)
+        _LOGGER.info("Turning on fan '%s' (id=%s) speed=%s", self.name, self.id, speed)
+        await self.hub.switch_on(self.id, speed=speed)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the fan."""
@@ -100,8 +118,10 @@ class BuildTrackFanEntity(FanEntity):
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the fan speed percentage."""
-        _LOGGER.info("Setting fan '%s' (id=%s) to %d%%", self.name, self.id, percentage)
         if percentage == 0:
+            _LOGGER.info("Turning off fan '%s' (id=%s) via 0%%", self.name, self.id)
             await self.hub.switch_off(self.id)
         else:
-            await self.hub.switch_on(self.id, speed=percentage)
+            speed = self._snap_speed(percentage)
+            _LOGGER.info("Setting fan '%s' (id=%s) to speed %s", self.name, self.id, speed)
+            await self.hub.switch_on(self.id, speed=speed)
