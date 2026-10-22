@@ -25,8 +25,16 @@ MQTT_BROKER_PORT = 443
 MQTT_WEBSOCKET_PATH = "/mqtt"
 MQTT_ORIGIN = "https://ezcentral.buildtrack.in"
 MQTT_PROTOCOL = "mqtt"
-MQTT_KEEPALIVE = 10
-MQTT_TIMEOUT = 20
+# Keepalive for the cloud WebSocket broker. Kept comfortably high so a brief
+# latency spike does not trip the broker's 1.5x-keepalive idle timeout. The web
+# client uses a similar value.
+MQTT_KEEPALIVE = 60
+# Select/loop timeout passed to loop_forever(). This MUST be well below
+# MQTT_KEEPALIVE: paho only runs its keepalive check (and sends PINGREQ) after
+# each select() returns, so a timeout >= keepalive delays the ping past the
+# broker's deadline and causes constant disconnects (codes 7 / 16). 1s is the
+# paho default and leaves plenty of headroom under the 60s keepalive.
+MQTT_TIMEOUT = 1
 
 # Timeouts
 API_REQUEST_TIMEOUT = 10

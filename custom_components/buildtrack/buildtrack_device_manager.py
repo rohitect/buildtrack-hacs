@@ -391,8 +391,19 @@ class BuildTrackDeviceManager:
                         self.update_switch_state(payload)
 
             def on_disconnect(client, userdata, rc):
-                _LOGGER.warning("Buildtrack MQTT Server Disconnected with code: %s", rc)
                 self.is_mqtt_connected = False
+                # rc == 0 is a clean, client-initiated disconnect (e.g. HA
+                # reload/shutdown) — not worth a warning. We also stay quiet
+                # while shutting down. Everything else is an unexpected drop
+                # that paho will auto-reconnect from, logged at INFO so a
+                # genuine storm is visible without flooding at WARNING.
+                if rc == 0 or self._shutting_down:
+                    _LOGGER.debug("Buildtrack MQTT disconnected cleanly (code 0)")
+                else:
+                    _LOGGER.info(
+                        "Buildtrack MQTT disconnected (code %s); auto-reconnecting",
+                        rc,
+                    )
 
             # Set callbacks
             self.mqtt_client.on_connect = on_connect
