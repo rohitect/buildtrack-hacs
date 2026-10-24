@@ -25,16 +25,29 @@ MQTT_BROKER_PORT = 443
 MQTT_WEBSOCKET_PATH = "/mqtt"
 MQTT_ORIGIN = "https://ezcentral.buildtrack.in"
 MQTT_PROTOCOL = "mqtt"
-# Keepalive for the cloud WebSocket broker. Kept comfortably high so a brief
-# latency spike does not trip the broker's 1.5x-keepalive idle timeout. The web
-# client uses a similar value.
-MQTT_KEEPALIVE = 60
+# Keepalive for the cloud WebSocket broker. This MUST stay well below 60s: the
+# WebSocket front end of ms.buildtrack.in closes any connection that has been
+# idle for 60s, regardless of the MQTT keepalive. With keepalive=60 the first
+# PINGREQ is due exactly at that cutoff, so the socket is dropped (code 7)
+# roughly every 60s. Verified by probing the broker: keepalive=60 drops at
+# 60.2s every time, keepalive=30 stays up with PINGREQ/PINGRESP every 30s.
+MQTT_KEEPALIVE = 30
 # Select/loop timeout passed to loop_forever(). This MUST be well below
 # MQTT_KEEPALIVE: paho only runs its keepalive check (and sends PINGREQ) after
 # each select() returns, so a timeout >= keepalive delays the ping past the
 # broker's deadline and causes constant disconnects (codes 7 / 16). 1s is the
-# paho default and leaves plenty of headroom under the 60s keepalive.
+# paho default and leaves plenty of headroom under the keepalive.
 MQTT_TIMEOUT = 1
+
+# Commands issued while MQTT is down are queued and flushed on reconnect.
+# Queued commands older than this are dropped rather than replayed, so a light
+# doesn't unexpectedly change state long after it was asked to.
+MQTT_COMMAND_QUEUE_TTL = 30
+# A QoS 0 publish written just before the socket drops can be lost silently.
+# On an unexpected disconnect, commands published within this many seconds are
+# re-queued and resent on reconnect. Commands set absolute states (on/off/
+# open/close/stop), so resending one is harmless.
+MQTT_RESEND_WINDOW = 3
 
 # Timeouts
 API_REQUEST_TIMEOUT = 10

@@ -7,6 +7,7 @@ import random
 import ssl
 import string
 import threading
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,8 @@ from .const import (
     MQTT_PROTOCOL,
     MQTT_KEEPALIVE,
     MQTT_TIMEOUT,
+    MQTT_COMMAND_QUEUE_TTL,
+    MQTT_RESEND_WINDOW,
 )
 
 if TYPE_CHECKING:
@@ -62,6 +65,18 @@ class BuildTrackDeviceManager:
         # Task tracking
         self._http_tasks: set[asyncio.Task] = set()
         self._shutting_down = False
+
+        # Outgoing MQTT command tracking, keyed by (mac_id, pin_number) so a
+        # newer command for the same pin supersedes an older one.
+        # _pending_commands: not yet sent (MQTT was down); flushed on reconnect.
+        # _recent_commands: sent within the last few seconds; re-queued if the
+        # connection drops before they could have reached the broker.
+        # Values are (command_json, monotonic timestamp). Guarded by an RLock
+        # because paho may invoke on_disconnect from inside publish() on the
+        # calling thread while we already hold the lock.
+        self._command_lock = threading.RLock()
+        self._pending_commands: dict[tuple[str, str], tuple[str, float]] = {}
+        self._recent_commands: dict[tuple[str, str], tuple[str, float]] = {}
 
         # State change callbacks: keyed by "{mac_id}_{pin_number}"
         self._state_callbacks: dict[str, list[Callable[[], None]]] = {}
@@ -327,6 +342,7 @@ class BuildTrackDeviceManager:
 
                 if not self.token:
                     _LOGGER.error("MQTT: No token available — cannot subscribe to account-level topics")
+                    self._flush_pending_commands(client)
                     return
 
                 # Subscribe to account-level topics for real-time push updates
@@ -352,6 +368,9 @@ class BuildTrackDeviceManager:
                         "passcode": mac_id,
                         "to": mac_id,
                     }))
+
+                # Send anything that was issued while we were disconnected.
+                self._flush_pending_commands(client)
 
             # The callback for when a PUBLISH message is received from the server.
             def on_message(client, userdata, msg):
@@ -404,6 +423,7 @@ class BuildTrackDeviceManager:
                         "Buildtrack MQTT disconnected (code %s); auto-reconnecting",
                         rc,
                     )
+                    self._requeue_recent_commands()
 
             # Set callbacks
             self.mqtt_client.on_connect = on_connect
@@ -494,21 +514,91 @@ class BuildTrackDeviceManager:
                     }
                 self._notify_callbacks(mac_id, pin_number)
 
-    def _send_command(self, mac_id: str, command_json: str) -> None:
-        """Send command via MQTT.
+    def _publish_command(self, client: mqtt.Client, mac_id: str, command_json: str) -> bool:
+        """Publish a command to the device's execute topic. Returns True on success."""
+        try:
+            result = client.publish(f"{mac_id}/execute", payload=command_json)
+        except Exception as ex:
+            _LOGGER.warning("MQTT publish failed for %s: %s", mac_id, ex)
+            return False
+        if result.rc != mqtt.MQTT_ERR_SUCCESS:
+            _LOGGER.warning("MQTT publish failed for %s (rc=%s)", mac_id, result.rc)
+            return False
+        return True
+
+    def _send_command(self, mac_id: str, pin_number: str, command_json: str) -> None:
+        """Send command via MQTT, queueing it if the connection is down.
 
         Args:
             mac_id: The MAC ID of the device
+            pin_number: The pin the command targets (used to coalesce commands)
             command_json: The JSON command string to send
         """
-        if self.is_mqtt_connected and self.mqtt_client is not None:
-            try:
+        key = (mac_id, str(pin_number))
+        with self._command_lock:
+            # This command supersedes any older one queued for the same pin.
+            self._pending_commands.pop(key, None)
+            client = self.mqtt_client
+            if self.is_mqtt_connected and client is not None:
                 _LOGGER.info("Sending command via MQTT to %s: %s", mac_id, command_json)
-                self.mqtt_client.publish(f"{mac_id}/execute", payload=command_json)
-            except Exception as ex:
-                _LOGGER.error("MQTT publish failed for %s: %s", mac_id, ex)
-        else:
-            _LOGGER.warning("MQTT not connected — skipping MQTT command for %s", mac_id)
+                if self._publish_command(client, mac_id, command_json):
+                    self._recent_commands[key] = (command_json, time.monotonic())
+                    return
+            self._pending_commands[key] = (command_json, time.monotonic())
+            _LOGGER.warning(
+                "MQTT not connected — queued command for %s pin %s; will send on reconnect",
+                mac_id,
+                pin_number,
+            )
+
+    def _requeue_recent_commands(self) -> None:
+        """Re-queue commands sent just before an unexpected disconnect.
+
+        A QoS 0 publish written moments before the socket dropped may never have
+        reached the broker, so resend those on reconnect.
+        """
+        with self._command_lock:
+            now = time.monotonic()
+            requeued = 0
+            for key, (command_json, sent_at) in self._recent_commands.items():
+                if now - sent_at <= MQTT_RESEND_WINDOW and key not in self._pending_commands:
+                    self._pending_commands[key] = (command_json, sent_at)
+                    requeued += 1
+            self._recent_commands.clear()
+            if requeued:
+                _LOGGER.info(
+                    "Re-queued %d command(s) sent just before the MQTT disconnect", requeued
+                )
+
+    def _flush_pending_commands(self, client: mqtt.Client) -> None:
+        """Send commands queued while disconnected. Called from on_connect."""
+        with self._command_lock:
+            pending = self._pending_commands
+            self._pending_commands = {}
+            now = time.monotonic()
+            for key, (command_json, queued_at) in pending.items():
+                mac_id, pin_number = key
+                age = now - queued_at
+                if age > MQTT_COMMAND_QUEUE_TTL:
+                    _LOGGER.warning(
+                        "Dropping queued command for %s pin %s: queued %.0fs ago (limit %ss)",
+                        mac_id,
+                        pin_number,
+                        age,
+                        MQTT_COMMAND_QUEUE_TTL,
+                    )
+                    continue
+                _LOGGER.info(
+                    "Sending queued command via MQTT to %s (queued %.1fs ago): %s",
+                    mac_id,
+                    age,
+                    command_json,
+                )
+                if self._publish_command(client, mac_id, command_json):
+                    self._recent_commands[key] = (command_json, now)
+                else:
+                    # Connection dropped again mid-flush; keep it for the next one.
+                    self._pending_commands[key] = (command_json, queued_at)
 
     def switch_on(self, mac_id: str, pin_number: str, speed: int | None = None) -> None:
         """Switch on the device."""
@@ -521,7 +611,7 @@ class BuildTrackDeviceManager:
         self.call_local_http_api(mac_id, pin_number, "on", speed)
 
         # Send command via MQTT
-        self._send_command(mac_id, command_json)
+        self._send_command(mac_id, pin_number, command_json)
 
         # Update local state
         self.manual_device_state_update(mac_id, pin_number, True, speed)
@@ -537,7 +627,7 @@ class BuildTrackDeviceManager:
         self.call_local_http_api(mac_id, pin_number, "off", speed)
 
         # Send command via MQTT
-        self._send_command(mac_id, command_json)
+        self._send_command(mac_id, pin_number, command_json)
 
         # Update local state
         self.manual_device_state_update(mac_id, pin_number, False)
@@ -548,7 +638,7 @@ class BuildTrackDeviceManager:
         command_json = self._build_command(mac_id, pin_number, state, speed=0)
 
         # Send command via MQTT
-        self._send_command(mac_id, command_json)
+        self._send_command(mac_id, pin_number, command_json)
 
         # Update local state (covers don't have a simple on/off state)
         self.manual_device_state_update(mac_id, pin_number, False)
@@ -562,6 +652,10 @@ class BuildTrackDeviceManager:
         for task in self._http_tasks:
             task.cancel()
         self._http_tasks.clear()
+
+        with self._command_lock:
+            self._pending_commands.clear()
+            self._recent_commands.clear()
 
         # Disconnect MQTT (causes loop_forever to return, ending the thread)
         if self.mqtt_client is not None:
