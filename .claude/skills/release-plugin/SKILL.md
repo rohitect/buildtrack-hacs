@@ -97,7 +97,10 @@ against the previous baseline to confirm the change took effect.
 - MQTT broker: `ms.buildtrack.in:443` over WSS (`/mqtt`), source app `https://ezcentral.buildtrack.in`
 - Disconnect codes seen in logs: **7** = `MQTT_ERR_CONN_LOST`, **16** = `MQTT_ERR_KEEPALIVE`
   (both point at keepalive/loop-timeout misconfiguration — see `const.py`
-  `MQTT_KEEPALIVE` / `MQTT_TIMEOUT`; the loop timeout must stay well below keepalive).
+  `MQTT_KEEPALIVE`; paho's 1s loop timeout must stay well below keepalive).
 - The broker's WebSocket front end drops any connection idle for **60s**, so
   `MQTT_KEEPALIVE` must stay well under 60 (30 works). A disconnect almost exactly
   every 60s means keepalive has crept back up to >= 60.
+- Run the MQTT loop with paho's `loop_start()`, never `loop_forever()` in our own
+  thread: paho then thinks it is unthreaded and writes from HA's event loop too, which
+  crashes the loop thread with `BufferError: Existing exports of data` (MQTT dead until restart).

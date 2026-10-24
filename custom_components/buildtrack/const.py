@@ -32,12 +32,10 @@ MQTT_PROTOCOL = "mqtt"
 # roughly every 60s. Verified by probing the broker: keepalive=60 drops at
 # 60.2s every time, keepalive=30 stays up with PINGREQ/PINGRESP every 30s.
 MQTT_KEEPALIVE = 30
-# Select/loop timeout passed to loop_forever(). This MUST be well below
-# MQTT_KEEPALIVE: paho only runs its keepalive check (and sends PINGREQ) after
-# each select() returns, so a timeout >= keepalive delays the ping past the
-# broker's deadline and causes constant disconnects (codes 7 / 16). 1s is the
-# paho default and leaves plenty of headroom under the keepalive.
-MQTT_TIMEOUT = 1
+# The network loop runs via paho's loop_start(), which uses paho's default 1s
+# select timeout. That must stay well below MQTT_KEEPALIVE: paho only sends
+# PINGREQ after each select() returns, so a timeout >= keepalive delays the
+# ping past the broker's deadline (disconnect codes 7 / 16).
 
 # Commands issued while MQTT is down are queued and flushed on reconnect.
 # Queued commands older than this are dropped rather than replayed, so a light

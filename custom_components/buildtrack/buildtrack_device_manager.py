@@ -22,7 +22,6 @@ from .const import (
     MQTT_ORIGIN,
     MQTT_PROTOCOL,
     MQTT_KEEPALIVE,
-    MQTT_TIMEOUT,
     MQTT_COMMAND_QUEUE_TTL,
     MQTT_RESEND_WINDOW,
 )
@@ -462,13 +461,20 @@ class BuildTrackDeviceManager:
             _LOGGER.debug(f"Attempting to connect to {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT} via WebSocket")
             self.mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=MQTT_KEEPALIVE)
 
-            # Start the network loop in a separate thread
-            self.mqtt_thread = threading.Thread(
-                target=self.mqtt_client.loop_forever,
-                kwargs={"timeout": MQTT_TIMEOUT},
-            )
-            self.mqtt_thread.daemon = True
-            self.mqtt_thread.start()
+            # Start the network loop with paho's own loop_start() rather than
+            # running loop_forever() in a thread of our own. paho only knows it
+            # is threaded when it owns the thread; otherwise publish() called
+            # from HA's event loop writes to the socket directly, racing the
+            # loop thread's writes. With the WebSocket transport that race
+            # raises "BufferError: Existing exports of data" and kills the loop
+            # thread, leaving MQTT dead until HA restarts. loop_start() uses
+            # paho's default 1s select timeout, well below MQTT_KEEPALIVE.
+            self.mqtt_client.loop_start()
+            # paho names the thread after the client id, which embeds the
+            # account credentials and would show up in every log line.
+            self.mqtt_thread = self.mqtt_client._thread
+            if self.mqtt_thread is not None:
+                self.mqtt_thread.name = "buildtrack-mqtt"
             _LOGGER.debug("MQTT WebSocket thread started successfully")
 
         except Exception as ex:
